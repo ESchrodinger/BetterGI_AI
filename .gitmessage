@@ -1,0 +1,10 @@
+<type>(<scope>): <summary>
+
+# types: feat, fix, docs, refactor, test, chore, build, ci
+# scope examples: mcp, runner, protocol, transport, adapter, skill
+#
+# Body: explain why the change exists and any important tradeoffs.
+#
+# Footer examples:
+# BREAKING CHANGE:
+# Refs:

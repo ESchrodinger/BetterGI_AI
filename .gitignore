@@ -1,0 +1,55 @@
+# Operating system files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Editors and IDEs
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+.vs/
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+*.local.json
+secrets/
+
+# Logs and temporary output
+*.log
+logs/
+tmp/
+temp/
+
+# Node.js / TypeScript
+node_modules/
+dist/
+build/
+coverage/
+.npm/
+.pnpm-store/
+
+# .NET
+bin/
+obj/
+TestResults/
+*.user
+*.suo
+*.rsuser
+
+# Python tooling
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+venv/
+
+# Local BetterGI runner artifacts
+runner-data/
+captures/
+screenshots/
+artifacts/
+out/

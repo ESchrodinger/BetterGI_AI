@@ -14,7 +14,7 @@
     "scriptDirectory": "C:\\Users\\zjiang\\AppData\\Roaming\\BetterGI\\scripts"
   },
   "policy": {
-    "allowTasks": ["detect", "status", "logs", "stop"],
+    "allowTasks": [],
     "allowScripts": [],
     "requireSingleActiveJob": true
   }

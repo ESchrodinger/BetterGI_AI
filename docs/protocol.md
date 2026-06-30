@@ -53,9 +53,21 @@ Requests cancellation of the active job.
 
 Returns allowlisted semantic tasks and scripts.
 
+Example result:
+
+```json
+{"protocolVersion":"0.1.0","tasks":[{"kind":"task","name":"daily_route","allowed":true}],"scripts":[]}
+```
+
 ### `tasks.run`
 
-Starts an allowlisted task or script and returns a `jobId`.
+Starts an allowlisted task or script and returns a `jobId`. If the BetterGI execution adapter is not configured, the runner must reject non-dry-run calls with `-32010` instead of pretending the task started.
+
+Dry-run request:
+
+```json
+{"jsonrpc":"2.0","id":"2","method":"tasks.run","params":{"kind":"task","name":"daily_route","dryRun":true}}
+```
 
 ### `jobs.status`
 
@@ -91,6 +103,7 @@ Returns logs attached to a job.
 - `-32003`: task not allowed
 - `-32004`: job already running
 - `-32005`: stop failed
+- `-32006`: job not found
 - `-32010`: adapter failure
 
 ## Compatibility

@@ -110,6 +110,34 @@ export interface Capability {
   available: boolean;
 }
 
+export interface TaskEntry {
+  kind: "task" | "script";
+  name: string;
+  allowed: boolean;
+  description?: string;
+}
+
+export interface TaskListResult {
+  protocolVersion: string;
+  tasks: TaskEntry[];
+  scripts: TaskEntry[];
+}
+
+export interface TaskRunParams {
+  kind: "task" | "script";
+  name: string;
+  params?: Record<string, unknown>;
+  dryRun?: boolean;
+}
+
+export interface TaskRunResult {
+  accepted: boolean;
+  dryRun: boolean;
+  jobId?: string;
+  status?: JobStatusValue;
+  reason?: string;
+}
+
 export interface JobSummary {
   jobId: string;
   capability: string;

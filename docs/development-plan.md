@@ -32,9 +32,9 @@
 
 ## M4: BetterGI Adapter
 
-- Add config-driven BetterGI path detection.
-- Read BetterGI logs.
-- List allowlisted scripts/tasks.
+- Add config-driven BetterGI path detection. Done in runner scaffold.
+- Read BetterGI logs. Done for configured log directories.
+- List allowlisted scripts/tasks. Done through policy context.
 - Start allowlisted jobs.
 - Track job status.
 

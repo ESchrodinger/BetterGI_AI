@@ -3,6 +3,7 @@ import { createInterface } from "node:readline";
 
 const startedAt = new Date().toISOString();
 const logs = [`${startedAt} mock runner started`];
+const jobs = new Map();
 
 const capabilities = [
   {
@@ -28,10 +29,41 @@ const capabilities = [
     description: "Request active job cancellation.",
     mutating: true,
     available: true
+  },
+  {
+    name: "list_tasks",
+    description: "List allowlisted BetterGI tasks and scripts.",
+    mutating: false,
+    available: true
+  },
+  {
+    name: "run_task",
+    description: "Start or dry-run an allowlisted BetterGI task.",
+    mutating: true,
+    available: true
+  },
+  {
+    name: "run_script",
+    description: "Start or dry-run an allowlisted BetterGI script.",
+    mutating: true,
+    available: true
+  },
+  {
+    name: "job_status",
+    description: "Read a runner job status.",
+    mutating: false,
+    available: true
+  },
+  {
+    name: "job_logs",
+    description: "Read runner job logs.",
+    mutating: false,
+    available: true
   }
 ];
 
-function detectionResult() {
+function detectionResult(params = {}) {
+  const bettergiConfig = params.context?.bettergi ?? {};
   return {
     protocolVersion: "0.1.0",
     runner: {
@@ -41,8 +73,12 @@ function detectionResult() {
       pid: process.pid
     },
     bettergi: {
-      configured: false,
-      processFound: false
+      configured: Object.keys(bettergiConfig).length > 0,
+      processFound: false,
+      installPath: bettergiConfig.installPath,
+      executablePath: bettergiConfig.executablePath,
+      logDirectory: bettergiConfig.logDirectory,
+      scriptDirectory: bettergiConfig.scriptDirectory
     },
     game: {
       processFound: false,
@@ -51,20 +87,121 @@ function detectionResult() {
   };
 }
 
-function statusResult() {
+function statusResult(params = {}) {
   return {
-    ...detectionResult(),
+    ...detectionResult(params),
     status: "ready",
-    activeJob: null
+    activeJob: activeJob()
+  };
+}
+
+function activeJob() {
+  return [...jobs.values()].find((job) => job.status === "running") ?? null;
+}
+
+function policy(params = {}) {
+  return {
+    allowTasks: params.context?.policy?.allowTasks ?? [],
+    allowScripts: params.context?.policy?.allowScripts ?? [],
+    requireSingleActiveJob: params.context?.policy?.requireSingleActiveJob ?? true
+  };
+}
+
+function listTasks(params = {}) {
+  const currentPolicy = policy(params);
+  return {
+    protocolVersion: "0.1.0",
+    tasks: currentPolicy.allowTasks.map((name) => ({
+      kind: "task",
+      name,
+      allowed: true
+    })),
+    scripts: currentPolicy.allowScripts.map((name) => ({
+      kind: "script",
+      name,
+      allowed: true
+    }))
+  };
+}
+
+function runTask(params = {}) {
+  const kind = params.kind ?? "task";
+  const name = params.name;
+  const dryRun = params.dryRun === true;
+  const currentPolicy = policy(params);
+  const allowedNames = kind === "script" ? currentPolicy.allowScripts : currentPolicy.allowTasks;
+
+  if (!allowedNames.includes(name)) {
+    const error = new Error(`${kind} is not allowlisted: ${name}`);
+    error.code = -32003;
+    throw error;
+  }
+
+  if (dryRun) {
+    return {
+      accepted: true,
+      dryRun: true,
+      reason: "mock runner dry run accepted"
+    };
+  }
+
+  const jobId = `mock-${Date.now()}`;
+  const now = new Date().toISOString();
+  const job = {
+    jobId,
+    capability: `${kind}:${name}`,
+    status: "succeeded",
+    startedAt: now,
+    finishedAt: now
+  };
+  jobs.set(jobId, job);
+  logs.push(`${now} mock job succeeded: ${job.capability}`);
+
+  return {
+    accepted: true,
+    dryRun: false,
+    jobId,
+    status: job.status
+  };
+}
+
+function jobStatus(params = {}) {
+  const job = jobs.get(params.jobId);
+  if (!job) {
+    const error = new Error(`job not found: ${params.jobId}`);
+    error.code = -32006;
+    throw error;
+  }
+  return job;
+}
+
+function jobLogs(params = {}) {
+  const job = jobs.get(params.jobId);
+  if (!job) {
+    const error = new Error(`job not found: ${params.jobId}`);
+    error.code = -32006;
+    throw error;
+  }
+
+  const tail = Number.isInteger(params.tail) ? params.tail : 100;
+  const lines = [
+    `${job.startedAt} mock job started: ${job.capability}`,
+    `${job.finishedAt ?? job.startedAt} mock job status: ${job.status}`
+  ];
+
+  return {
+    source: "job",
+    lines: lines.slice(-tail),
+    truncated: lines.length > tail
   };
 }
 
 function handle(method, params) {
   switch (method) {
     case "runner.detect":
-      return detectionResult();
+      return detectionResult(params);
     case "runner.status":
-      return statusResult();
+      return statusResult(params);
     case "runner.capabilities":
       return {
         protocolVersion: "0.1.0",
@@ -84,6 +221,14 @@ function handle(method, params) {
         stopped: false,
         reason: "no active job"
       };
+    case "tasks.list":
+      return listTasks(params);
+    case "tasks.run":
+      return runTask(params);
+    case "jobs.status":
+      return jobStatus(params);
+    case "jobs.logs":
+      return jobLogs(params);
     default: {
       const error = new Error(`unknown runner method: ${method}`);
       error.code = -32601;

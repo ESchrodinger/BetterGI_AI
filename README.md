@@ -27,6 +27,10 @@ Portable agent control plane for integrating BetterGI with MCP servers, skills, 
 - `examples/dev-mock.config.json`: local mock config for development on macOS.
 - `examples/windows-local.config.json`: Windows local runner config shape.
 - `examples/mac-ssh.config.json`: macOS-to-Windows SSH config shape.
+- `packages/mcp-server`: MCP tools for detection, logs, tasks, scripts, and job lookup.
+- `packages/runner`: Windows runner scaffold with path/process/log detection and allowlist checks.
+
+The runner currently supports task/script dry-runs and allowlist validation. Real BetterGI task execution is intentionally blocked until a concrete adapter is added.
 
 ## Development Commands
 

@@ -20,9 +20,10 @@ Agent -> BetterGI MCP tools -> runner transport -> Windows runner -> BetterGI ad
 1. Call `bettergi_detect` before any mutating action.
 2. Call `bettergi_status` and confirm there is no conflicting active job.
 3. Use `bettergi_list_capabilities` when the requested operation is ambiguous or not already known to be available.
-4. For execution, prefer semantic task/script tools when present, such as `bettergi_run_task` or `bettergi_run_script`.
-5. After a failure, call `bettergi_logs` before retrying.
-6. Use `bettergi_stop` when the task is stuck, unsafe, or the user asks to stop.
+4. Use `bettergi_list_tasks` before execution unless the task name came directly from the user and is already known to be allowlisted.
+5. For execution, prefer semantic task/script tools when present, such as `bettergi_run_task` or `bettergi_run_script`.
+6. After a failure, call `bettergi_logs` before retrying.
+7. Use `bettergi_stop` when the task is stuck, unsafe, or the user asks to stop.
 
 ## Safety Rules
 

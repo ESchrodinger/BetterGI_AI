@@ -8,8 +8,8 @@
     "protocolVersion": "0.1.0"
   },
   "policy": {
-    "allowTasks": ["detect", "status", "logs", "stop"],
-    "allowScripts": [],
+    "allowTasks": ["mock_route"],
+    "allowScripts": ["mock_script"],
     "requireSingleActiveJob": true
   }
 }

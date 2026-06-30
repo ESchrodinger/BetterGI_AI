@@ -38,17 +38,21 @@ static async Task RunRpcLoop()
 
         JsonNode? id = request?["id"]?.DeepClone();
         string? method = request?["method"]?.GetValue<string>();
-        JsonObject parameters = request?["params"]?.AsObject() ?? new JsonObject();
+        JsonObject parameters = request?["params"] as JsonObject ?? new JsonObject();
 
         try
         {
             object result = method switch
             {
-                "runner.detect" => BuildDetectionResult(),
-                "runner.status" => BuildStatusResult(),
+                "runner.detect" => BuildDetectionResult(parameters),
+                "runner.status" => BuildStatusResult(parameters),
                 "runner.capabilities" => BuildCapabilitiesResult(),
                 "runner.logs" => BuildLogsResult(parameters),
                 "runner.stop" => BuildStopResult(parameters),
+                "tasks.list" => BuildTasksListResult(parameters),
+                "tasks.run" => BuildTaskRunResult(parameters),
+                "jobs.status" => throw new RpcException(-32006, "job not found"),
+                "jobs.logs" => throw new RpcException(-32006, "job not found"),
                 _ => throw new RpcException(-32601, $"unknown runner method: {method}")
             };
 
@@ -65,11 +69,16 @@ static async Task RunRpcLoop()
     }
 }
 
-static object BuildDetectionResult()
+static object BuildDetectionResult(JsonObject parameters)
 {
+    JsonObject betterGiConfig = BetterGiConfig(parameters);
     bool isWindows = OperatingSystem.IsWindows();
     bool betterGiFound = isWindows && AnyProcess("BetterGI", "BetterGenshinImpact");
     bool gameFound = isWindows && AnyProcess("YuanShen", "GenshinImpact", "Genshin Impact");
+    string? installPath = GetString(betterGiConfig, "installPath");
+    string? executablePath = GetString(betterGiConfig, "executablePath");
+    string? logDirectory = GetString(betterGiConfig, "logDirectory");
+    string? scriptDirectory = GetString(betterGiConfig, "scriptDirectory");
 
     return new
     {
@@ -83,8 +92,16 @@ static object BuildDetectionResult()
         },
         bettergi = new
         {
-            configured = false,
-            processFound = betterGiFound
+            configured = betterGiConfig.Count > 0,
+            processFound = betterGiFound,
+            installPath,
+            installPathExists = Directory.Exists(installPath),
+            executablePath,
+            executablePathExists = File.Exists(executablePath),
+            logDirectory,
+            logDirectoryExists = Directory.Exists(logDirectory),
+            scriptDirectory,
+            scriptDirectoryExists = Directory.Exists(scriptDirectory)
         },
         game = new
         {
@@ -94,11 +111,12 @@ static object BuildDetectionResult()
     };
 }
 
-static object BuildStatusResult()
+static object BuildStatusResult(JsonObject parameters)
 {
-    object detection = BuildDetectionResult();
-    JsonObject detectionJson = JsonSerializer.SerializeToNode(detection)!.AsObject();
-    detectionJson["status"] = "ready";
+    JsonObject detectionJson = JsonSerializer.SerializeToNode(BuildDetectionResult(parameters))!.AsObject();
+    bool isWindows = detectionJson["runner"]?["isWindows"]?.GetValue<bool>() ?? false;
+
+    detectionJson["status"] = isWindows ? "ready" : "degraded";
     detectionJson["activeJob"] = null;
     return detectionJson;
 }
@@ -127,7 +145,7 @@ static object BuildCapabilitiesResult()
             new
             {
                 name = "logs",
-                description = "Read recent runner logs.",
+                description = "Read recent runner or BetterGI logs.",
                 mutating = false,
                 available = true
             },
@@ -137,6 +155,41 @@ static object BuildCapabilitiesResult()
                 description = "Request active job cancellation.",
                 mutating = true,
                 available = true
+            },
+            new
+            {
+                name = "list_tasks",
+                description = "List allowlisted BetterGI tasks and scripts.",
+                mutating = false,
+                available = true
+            },
+            new
+            {
+                name = "run_task",
+                description = "Dry-run allowlisted tasks; real execution needs an adapter.",
+                mutating = true,
+                available = true
+            },
+            new
+            {
+                name = "run_script",
+                description = "Dry-run allowlisted scripts; real execution needs an adapter.",
+                mutating = true,
+                available = true
+            },
+            new
+            {
+                name = "job_status",
+                description = "Read job status after task execution is implemented.",
+                mutating = false,
+                available = false
+            },
+            new
+            {
+                name = "job_logs",
+                description = "Read job logs after task execution is implemented.",
+                mutating = false,
+                available = false
             }
         }
     };
@@ -144,8 +197,48 @@ static object BuildCapabilitiesResult()
 
 static object BuildLogsResult(JsonObject parameters)
 {
-    int tail = parameters["tail"]?.GetValue<int>() ?? 100;
+    int tail = ClampTail(parameters["tail"]?.GetValue<int>() ?? 100);
     string source = parameters["source"]?.GetValue<string>() ?? "runner";
+
+    if (source == "bettergi")
+    {
+        string? logDirectory = GetString(BetterGiConfig(parameters), "logDirectory");
+        if (string.IsNullOrWhiteSpace(logDirectory) || !Directory.Exists(logDirectory))
+        {
+            return new
+            {
+                source,
+                lines = Array.Empty<string>(),
+                truncated = false,
+                unavailableReason = "BetterGI log directory is not configured or does not exist."
+            };
+        }
+
+        string? latestLog = Directory
+            .GetFiles(logDirectory)
+            .OrderByDescending(File.GetLastWriteTimeUtc)
+            .FirstOrDefault();
+
+        if (latestLog is null)
+        {
+            return new
+            {
+                source,
+                lines = Array.Empty<string>(),
+                truncated = false,
+                unavailableReason = "BetterGI log directory contains no files."
+            };
+        }
+
+        (string[] lines, bool truncated) = ReadTail(latestLog, tail);
+        return new
+        {
+            source,
+            file = latestLog,
+            lines,
+            truncated
+        };
+    }
 
     return new
     {
@@ -159,6 +252,64 @@ static object BuildLogsResult(JsonObject parameters)
     };
 }
 
+static object BuildTasksListResult(JsonObject parameters)
+{
+    JsonObject policy = Policy(parameters);
+    string[] allowTasks = GetStringArray(policy, "allowTasks");
+    string[] allowScripts = GetStringArray(policy, "allowScripts");
+
+    return new
+    {
+        protocolVersion = ProtocolVersion,
+        tasks = allowTasks.Select(name => new
+        {
+            kind = "task",
+            name,
+            allowed = true
+        }),
+        scripts = allowScripts.Select(name => new
+        {
+            kind = "script",
+            name,
+            allowed = true
+        })
+    };
+}
+
+static object BuildTaskRunResult(JsonObject parameters)
+{
+    string kind = parameters["kind"]?.GetValue<string>() ?? "task";
+    string? name = parameters["name"]?.GetValue<string>();
+    bool dryRun = parameters["dryRun"]?.GetValue<bool>() ?? false;
+
+    if (string.IsNullOrWhiteSpace(name))
+    {
+        throw new RpcException(-32602, "task or script name is required");
+    }
+
+    JsonObject policy = Policy(parameters);
+    string[] allowedNames = kind == "script"
+        ? GetStringArray(policy, "allowScripts")
+        : GetStringArray(policy, "allowTasks");
+
+    if (!allowedNames.Contains(name))
+    {
+        throw new RpcException(-32003, $"{kind} is not allowlisted: {name}");
+    }
+
+    if (dryRun)
+    {
+        return new
+        {
+            accepted = true,
+            dryRun = true,
+            reason = "allowlist check passed; no BetterGI task was started"
+        };
+    }
+
+    throw new RpcException(-32010, "BetterGI execution adapter is not configured yet");
+}
+
 static object BuildStopResult(JsonObject parameters)
 {
     string reason = parameters["reason"]?.GetValue<string>() ?? "no reason";
@@ -168,6 +319,63 @@ static object BuildStopResult(JsonObject parameters)
         reason = "no active job",
         requestedReason = reason
     };
+}
+
+static JsonObject Context(JsonObject parameters)
+{
+    return parameters["context"] as JsonObject ?? new JsonObject();
+}
+
+static JsonObject BetterGiConfig(JsonObject parameters)
+{
+    return Context(parameters)["bettergi"] as JsonObject ?? new JsonObject();
+}
+
+static JsonObject Policy(JsonObject parameters)
+{
+    return Context(parameters)["policy"] as JsonObject ?? new JsonObject();
+}
+
+static string? GetString(JsonObject obj, string propertyName)
+{
+    return obj[propertyName]?.GetValue<string>();
+}
+
+static string[] GetStringArray(JsonObject obj, string propertyName)
+{
+    if (obj[propertyName] is not JsonArray array)
+    {
+        return Array.Empty<string>();
+    }
+
+    return array
+        .Select(node => node?.GetValue<string>())
+        .Where(value => !string.IsNullOrWhiteSpace(value))
+        .Cast<string>()
+        .ToArray();
+}
+
+static int ClampTail(int tail)
+{
+    return Math.Min(Math.Max(tail, 1), 1000);
+}
+
+static (string[] Lines, bool Truncated) ReadTail(string path, int tail)
+{
+    Queue<string> queue = new();
+    int total = 0;
+
+    foreach (string line in File.ReadLines(path))
+    {
+        total += 1;
+        if (queue.Count == tail)
+        {
+            queue.Dequeue();
+        }
+        queue.Enqueue(line);
+    }
+
+    return (queue.ToArray(), total > tail);
 }
 
 static bool AnyProcess(params string[] names)

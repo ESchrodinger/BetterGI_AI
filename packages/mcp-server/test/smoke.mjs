@@ -60,6 +60,18 @@ function request(method, params = {}) {
   });
 }
 
+async function callTool(name, args = {}) {
+  const result = await request("tools/call", {
+    name,
+    arguments: args
+  });
+  const payload = JSON.parse(result.content[0].text);
+  return {
+    result,
+    payload
+  };
+}
+
 try {
   const initialize = await request("initialize", {
     protocolVersion: "2024-11-05",
@@ -74,36 +86,64 @@ try {
   const tools = await request("tools/list");
   assert.ok(tools.tools.some((tool) => tool.name === "bettergi_detect"));
 
-  const detect = await request("tools/call", {
-    name: "bettergi_detect",
-    arguments: {}
-  });
-  assert.equal(detect.isError, false);
-  assert.match(detect.content[0].text, /"protocolVersion": "0.1.0"/);
+  const detect = await callTool("bettergi_detect");
+  assert.equal(detect.result.isError, false);
+  assert.equal(detect.payload.protocolVersion, "0.1.0");
+  assert.equal(detect.payload.bettergi.configured, false);
 
-  const status = await request("tools/call", {
-    name: "bettergi_status",
-    arguments: {}
-  });
-  assert.equal(status.isError, false);
-  assert.match(status.content[0].text, /"status": "ready"/);
+  const status = await callTool("bettergi_status");
+  assert.equal(status.result.isError, false);
+  assert.equal(status.payload.status, "ready");
 
-  const logs = await request("tools/call", {
-    name: "bettergi_logs",
-    arguments: {
-      tail: 5
-    }
-  });
-  assert.equal(logs.isError, false);
-  assert.match(logs.content[0].text, /mock runner started/);
+  const tasks = await callTool("bettergi_list_tasks");
+  assert.equal(tasks.result.isError, false);
+  assert.deepEqual(
+    tasks.payload.tasks.map((task) => task.name),
+    ["mock_route"]
+  );
+  assert.deepEqual(
+    tasks.payload.scripts.map((script) => script.name),
+    ["mock_script"]
+  );
 
-  const stop = await request("tools/call", {
-    name: "bettergi_stop",
-    arguments: {
-      reason: "smoke test"
-    }
+  const dryRun = await callTool("bettergi_run_task", {
+    task: "mock_route",
+    dryRun: true
   });
-  assert.equal(stop.isError, false);
+  assert.equal(dryRun.result.isError, false);
+  assert.equal(dryRun.payload.accepted, true);
+  assert.equal(dryRun.payload.dryRun, true);
+
+  const run = await callTool("bettergi_run_task", {
+    task: "mock_route"
+  });
+  assert.equal(run.result.isError, false);
+  assert.equal(run.payload.accepted, true);
+  assert.equal(run.payload.status, "succeeded");
+
+  const job = await callTool("bettergi_job_status", {
+    jobId: run.payload.jobId
+  });
+  assert.equal(job.result.isError, false);
+  assert.equal(job.payload.jobId, run.payload.jobId);
+
+  const jobLogs = await callTool("bettergi_job_logs", {
+    jobId: run.payload.jobId,
+    tail: 5
+  });
+  assert.equal(jobLogs.result.isError, false);
+  assert.match(jobLogs.payload.lines.join("\n"), /mock job status: succeeded/);
+
+  const logs = await callTool("bettergi_logs", {
+    tail: 5
+  });
+  assert.equal(logs.result.isError, false);
+  assert.match(logs.payload.lines.join("\n"), /mock runner started/);
+
+  const stop = await callTool("bettergi_stop", {
+    reason: "smoke test"
+  });
+  assert.equal(stop.result.isError, false);
 
   server.stdin.end();
   server.kill();

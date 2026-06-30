@@ -47,6 +47,93 @@ const TOOL_DEFINITIONS = [
     }
   },
   {
+    name: "bettergi_list_tasks",
+    description: "List allowlisted BetterGI tasks and scripts known to the runner.",
+    inputSchema: emptyObjectSchema()
+  },
+  {
+    name: "bettergi_run_task",
+    description: "Start or dry-run an allowlisted BetterGI semantic task.",
+    inputSchema: {
+      type: "object",
+      required: ["task"],
+      properties: {
+        task: {
+          type: "string",
+          minLength: 1
+        },
+        params: {
+          type: "object",
+          additionalProperties: true
+        },
+        dryRun: {
+          type: "boolean",
+          default: false
+        }
+      },
+      additionalProperties: false
+    }
+  },
+  {
+    name: "bettergi_run_script",
+    description: "Start or dry-run an allowlisted BetterGI script.",
+    inputSchema: {
+      type: "object",
+      required: ["name"],
+      properties: {
+        name: {
+          type: "string",
+          minLength: 1
+        },
+        args: {
+          type: "object",
+          additionalProperties: true
+        },
+        dryRun: {
+          type: "boolean",
+          default: false
+        }
+      },
+      additionalProperties: false
+    }
+  },
+  {
+    name: "bettergi_job_status",
+    description: "Return status for a previously started BetterGI runner job.",
+    inputSchema: {
+      type: "object",
+      required: ["jobId"],
+      properties: {
+        jobId: {
+          type: "string",
+          minLength: 1
+        }
+      },
+      additionalProperties: false
+    }
+  },
+  {
+    name: "bettergi_job_logs",
+    description: "Return log lines attached to a BetterGI runner job.",
+    inputSchema: {
+      type: "object",
+      required: ["jobId"],
+      properties: {
+        jobId: {
+          type: "string",
+          minLength: 1
+        },
+        tail: {
+          type: "integer",
+          minimum: 1,
+          maximum: 1000,
+          default: 100
+        }
+      },
+      additionalProperties: false
+    }
+  },
+  {
     name: "bettergi_stop",
     description: "Request cancellation of the active BetterGI runner job.",
     inputSchema: {
@@ -67,6 +154,11 @@ const TOOL_TO_RUNNER_METHOD = new Map([
   ["bettergi_status", "runner.status"],
   ["bettergi_list_capabilities", "runner.capabilities"],
   ["bettergi_logs", "runner.logs"],
+  ["bettergi_list_tasks", "tasks.list"],
+  ["bettergi_run_task", "tasks.run"],
+  ["bettergi_run_script", "tasks.run"],
+  ["bettergi_job_status", "jobs.status"],
+  ["bettergi_job_logs", "jobs.logs"],
   ["bettergi_stop", "runner.stop"]
 ]);
 
@@ -103,6 +195,7 @@ async function loadConfig(configPath) {
 class RunnerClient {
   constructor(config) {
     const processConfig = buildProcessConfig(config.transport);
+    this.context = buildRunnerContext(config);
     this.nextId = 1;
     this.pending = new Map();
     this.buffer = "";
@@ -132,7 +225,15 @@ class RunnerClient {
     }
 
     const id = String(this.nextId++);
-    const payload = { jsonrpc: "2.0", id, method, params };
+    const payload = {
+      jsonrpc: "2.0",
+      id,
+      method,
+      params: {
+        ...params,
+        context: this.context
+      }
+    };
     const line = `${JSON.stringify(payload)}\n`;
 
     const responsePromise = new Promise((resolvePromise, reject) => {
@@ -209,6 +310,18 @@ function buildProcessConfig(transport) {
   }
 
   throw new Error(`unsupported transport type: ${transport.type}`);
+}
+
+function buildRunnerContext(config) {
+  return {
+    protocolVersion: config.runner?.protocolVersion ?? "0.1.0",
+    bettergi: config.bettergi ?? {},
+    policy: {
+      allowTasks: config.policy?.allowTasks ?? [],
+      allowScripts: config.policy?.allowScripts ?? [],
+      requireSingleActiveJob: config.policy?.requireSingleActiveJob ?? true
+    }
+  };
 }
 
 function makeToolContent(result) {
@@ -330,7 +443,7 @@ async function handleMcpRequest(request, getRunner) {
 
 async function callTool(params, getRunner) {
   const name = params?.name;
-  const args = params?.arguments ?? {};
+  const args = buildRunnerArgs(name, params?.arguments ?? {});
   const runnerMethod = TOOL_TO_RUNNER_METHOD.get(name);
 
   if (!runnerMethod) {
@@ -356,6 +469,29 @@ async function callTool(params, getRunner) {
       }),
       isError: true
     };
+  }
+}
+
+function buildRunnerArgs(toolName, args) {
+  switch (toolName) {
+    case "bettergi_run_task":
+      return {
+        kind: "task",
+        name: args.task,
+        params: args.params ?? {},
+        dryRun: args.dryRun ?? false
+      };
+
+    case "bettergi_run_script":
+      return {
+        kind: "script",
+        name: args.name,
+        params: args.args ?? {},
+        dryRun: args.dryRun ?? false
+      };
+
+    default:
+      return args;
   }
 }
 

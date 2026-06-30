@@ -1,0 +1,23 @@
+{
+  "transport": {
+    "type": "ssh-stdio",
+    "host": "windows-gaming-pc",
+    "user": "zjiang",
+    "remoteCommand": "C:\\Tools\\bettergi-runner\\bettergi-runner.exe",
+    "remoteArgs": ["rpc", "--stdio"]
+  },
+  "runner": {
+    "protocolVersion": "0.1.0"
+  },
+  "bettergi": {
+    "installPath": "C:\\Program Files\\BetterGI",
+    "executablePath": "C:\\Program Files\\BetterGI\\BetterGI.exe",
+    "logDirectory": "C:\\Users\\zjiang\\AppData\\Roaming\\BetterGI\\logs",
+    "scriptDirectory": "C:\\Users\\zjiang\\AppData\\Roaming\\BetterGI\\scripts"
+  },
+  "policy": {
+    "allowTasks": ["detect", "status", "logs", "stop"],
+    "allowScripts": [],
+    "requireSingleActiveJob": true
+  }
+}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "BetterGI Agent"
+  short_description: "Safely run BetterGI through MCP"
+  default_prompt: "Use $bettergi-agent to inspect BetterGI status and run an allowed task safely."

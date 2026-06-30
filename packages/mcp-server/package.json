@@ -1,0 +1,9 @@
+{
+  "name": "@bettergi-ai/mcp-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "bettergi-mcp": "./src/index.mjs"
+  }
+}

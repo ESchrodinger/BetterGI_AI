@@ -1,0 +1,14 @@
+{
+  "name": "bettergi-ai",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "mcp:dev": "node packages/mcp-server/src/index.mjs --config examples/dev-mock.config.json",
+    "runner:mock": "node packages/runner/dev/mock-runner.mjs",
+    "test": "node packages/mcp-server/test/smoke.mjs"
+  }
+}

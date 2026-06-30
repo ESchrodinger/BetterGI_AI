@@ -1,0 +1,15 @@
+{
+  "transport": {
+    "type": "local-stdio",
+    "command": "node",
+    "args": ["packages/runner/dev/mock-runner.mjs"]
+  },
+  "runner": {
+    "protocolVersion": "0.1.0"
+  },
+  "policy": {
+    "allowTasks": ["detect", "status", "logs", "stop"],
+    "allowScripts": [],
+    "requireSingleActiveJob": true
+  }
+}

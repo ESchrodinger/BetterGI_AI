@@ -35,6 +35,7 @@ coverage/
 bin/
 obj/
 TestResults/
+.dotnet-cli/
 *.user
 *.suo
 *.rsuser

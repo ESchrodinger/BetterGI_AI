@@ -33,6 +33,9 @@ export interface BetterGiConfig {
   installPath?: string;
   executablePath?: string;
   logDirectory?: string;
+  userDirectory?: string;
+  oneDragonDirectory?: string;
+  scriptGroupDirectory?: string;
   scriptDirectory?: string;
 }
 
@@ -90,7 +93,21 @@ export interface DetectionResult {
     configured: boolean;
     processFound: boolean;
     installPath?: string;
+    installPathExists?: boolean;
     executablePath?: string;
+    executablePathExists?: boolean;
+    logDirectory?: string;
+    logDirectoryExists?: boolean;
+    userDirectory?: string;
+    userDirectoryExists?: boolean;
+    oneDragonDirectory?: string;
+    oneDragonDirectoryExists?: boolean;
+    oneDragonCount?: number;
+    scriptGroupDirectory?: string;
+    scriptGroupDirectoryExists?: boolean;
+    scriptGroupCount?: number;
+    scriptDirectory?: string;
+    scriptDirectoryExists?: boolean;
   };
   game: {
     processFound: boolean;
@@ -115,6 +132,7 @@ export interface TaskEntry {
   name: string;
   allowed: boolean;
   description?: string;
+  source?: "bettergi" | "policy";
 }
 
 export interface TaskListResult {

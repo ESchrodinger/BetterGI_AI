@@ -51,12 +51,12 @@ Requests cancellation of the active job.
 
 ### `tasks.list`
 
-Returns allowlisted semantic tasks and scripts.
+Returns BetterGI task/script inventory plus allowlist state. Discovered BetterGI entries are returned with `allowed: false` until they appear in policy.
 
 Example result:
 
 ```json
-{"protocolVersion":"0.1.0","tasks":[{"kind":"task","name":"daily_route","allowed":true}],"scripts":[]}
+{"protocolVersion":"0.1.0","tasks":[{"kind":"task","name":"one_dragon:daily","allowed":false,"source":"bettergi"}],"scripts":[{"kind":"script","name":"daily_route","allowed":true,"source":"policy"}]}
 ```
 
 ### `tasks.run`

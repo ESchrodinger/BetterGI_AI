@@ -20,6 +20,8 @@ static async Task RunRpcLoop()
     string? line;
     while ((line = await Console.In.ReadLineAsync()) is not null)
     {
+        line = line.Replace("\0", string.Empty).TrimStart('\uFEFF');
+
         if (string.IsNullOrWhiteSpace(line))
         {
             continue;
@@ -76,9 +78,12 @@ static object BuildDetectionResult(JsonObject parameters)
     bool betterGiFound = isWindows && AnyProcess("BetterGI", "BetterGenshinImpact");
     bool gameFound = isWindows && AnyProcess("YuanShen", "GenshinImpact", "Genshin Impact");
     string? installPath = GetString(betterGiConfig, "installPath");
-    string? executablePath = GetString(betterGiConfig, "executablePath");
-    string? logDirectory = GetString(betterGiConfig, "logDirectory");
-    string? scriptDirectory = GetString(betterGiConfig, "scriptDirectory");
+    string? executablePath = BetterGiExecutablePath(betterGiConfig);
+    string? logDirectory = BetterGiLogDirectory(betterGiConfig);
+    string? userDirectory = BetterGiUserDirectory(betterGiConfig);
+    string? oneDragonDirectory = BetterGiOneDragonDirectory(betterGiConfig);
+    string? scriptGroupDirectory = BetterGiScriptGroupDirectory(betterGiConfig);
+    string? scriptDirectory = BetterGiScriptDirectory(betterGiConfig);
 
     return new
     {
@@ -100,6 +105,14 @@ static object BuildDetectionResult(JsonObject parameters)
             executablePathExists = File.Exists(executablePath),
             logDirectory,
             logDirectoryExists = Directory.Exists(logDirectory),
+            userDirectory,
+            userDirectoryExists = Directory.Exists(userDirectory),
+            oneDragonDirectory,
+            oneDragonDirectoryExists = Directory.Exists(oneDragonDirectory),
+            oneDragonCount = ListJsonInventory(oneDragonDirectory).Length,
+            scriptGroupDirectory,
+            scriptGroupDirectoryExists = Directory.Exists(scriptGroupDirectory),
+            scriptGroupCount = ListJsonInventory(scriptGroupDirectory).Length,
             scriptDirectory,
             scriptDirectoryExists = Directory.Exists(scriptDirectory)
         },
@@ -202,7 +215,7 @@ static object BuildLogsResult(JsonObject parameters)
 
     if (source == "bettergi")
     {
-        string? logDirectory = GetString(BetterGiConfig(parameters), "logDirectory");
+        string? logDirectory = BetterGiLogDirectory(BetterGiConfig(parameters));
         if (string.IsNullOrWhiteSpace(logDirectory) || !Directory.Exists(logDirectory))
         {
             return new
@@ -257,21 +270,34 @@ static object BuildTasksListResult(JsonObject parameters)
     JsonObject policy = Policy(parameters);
     string[] allowTasks = GetStringArray(policy, "allowTasks");
     string[] allowScripts = GetStringArray(policy, "allowScripts");
+    JsonObject betterGiConfig = BetterGiConfig(parameters);
+    string[] oneDragonConfigs = ListJsonInventory(BetterGiOneDragonDirectory(betterGiConfig))
+        .Select(name => $"one_dragon:{name}")
+        .ToArray();
+    string[] scriptGroups = ListJsonInventory(BetterGiScriptGroupDirectory(betterGiConfig));
 
     return new
     {
         protocolVersion = ProtocolVersion,
-        tasks = allowTasks.Select(name => new
+        tasks = MergeInventory(oneDragonConfigs, allowTasks).Select(entry => new
         {
             kind = "task",
-            name,
-            allowed = true
+            name = entry.Name,
+            allowed = entry.Allowed,
+            source = entry.Source,
+            description = entry.Name.StartsWith("one_dragon:", StringComparison.Ordinal)
+                ? "BetterGI one-dragon configuration"
+                : "Policy allowlisted task"
         }),
-        scripts = allowScripts.Select(name => new
+        scripts = MergeInventory(scriptGroups, allowScripts).Select(entry => new
         {
             kind = "script",
-            name,
-            allowed = true
+            name = entry.Name,
+            allowed = entry.Allowed,
+            source = entry.Source,
+            description = entry.Source == "bettergi"
+                ? "BetterGI script/config group"
+                : "Policy allowlisted script"
         })
     };
 }
@@ -336,6 +362,77 @@ static JsonObject Policy(JsonObject parameters)
     return Context(parameters)["policy"] as JsonObject ?? new JsonObject();
 }
 
+static string? BetterGiExecutablePath(JsonObject betterGiConfig)
+{
+    string? configured = GetString(betterGiConfig, "executablePath");
+    if (!string.IsNullOrWhiteSpace(configured))
+    {
+        return configured;
+    }
+
+    return CombineIfBaseExists(GetString(betterGiConfig, "installPath"), "BetterGI.exe");
+}
+
+static string? BetterGiLogDirectory(JsonObject betterGiConfig)
+{
+    string? configured = GetString(betterGiConfig, "logDirectory");
+    if (!string.IsNullOrWhiteSpace(configured))
+    {
+        return configured;
+    }
+
+    return CombineIfBaseExists(GetString(betterGiConfig, "installPath"), "log");
+}
+
+static string? BetterGiUserDirectory(JsonObject betterGiConfig)
+{
+    string? configured = GetString(betterGiConfig, "userDirectory");
+    if (!string.IsNullOrWhiteSpace(configured))
+    {
+        return configured;
+    }
+
+    return CombineIfBaseExists(GetString(betterGiConfig, "installPath"), "User");
+}
+
+static string? BetterGiOneDragonDirectory(JsonObject betterGiConfig)
+{
+    string? configured = GetString(betterGiConfig, "oneDragonDirectory");
+    if (!string.IsNullOrWhiteSpace(configured))
+    {
+        return configured;
+    }
+
+    return CombineIfBaseExists(BetterGiUserDirectory(betterGiConfig), "OneDragon");
+}
+
+static string? BetterGiScriptGroupDirectory(JsonObject betterGiConfig)
+{
+    string? configured = GetString(betterGiConfig, "scriptGroupDirectory");
+    if (!string.IsNullOrWhiteSpace(configured))
+    {
+        return configured;
+    }
+
+    return CombineIfBaseExists(BetterGiUserDirectory(betterGiConfig), "ScriptGroup");
+}
+
+static string? BetterGiScriptDirectory(JsonObject betterGiConfig)
+{
+    string? configured = GetString(betterGiConfig, "scriptDirectory");
+    if (!string.IsNullOrWhiteSpace(configured))
+    {
+        return configured;
+    }
+
+    return CombineIfBaseExists(BetterGiUserDirectory(betterGiConfig), "JsScript");
+}
+
+static string? CombineIfBaseExists(string? basePath, string child)
+{
+    return string.IsNullOrWhiteSpace(basePath) ? null : Path.Combine(basePath, child);
+}
+
 static string? GetString(JsonObject obj, string propertyName)
 {
     return obj[propertyName]?.GetValue<string>();
@@ -353,6 +450,54 @@ static string[] GetStringArray(JsonObject obj, string propertyName)
         .Where(value => !string.IsNullOrWhiteSpace(value))
         .Cast<string>()
         .ToArray();
+}
+
+static string[] ListJsonInventory(string? directory)
+{
+    if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory))
+    {
+        return Array.Empty<string>();
+    }
+
+    try
+    {
+        return Directory
+            .EnumerateFiles(directory, "*.json", SearchOption.AllDirectories)
+            .Select(path => InventoryName(directory, path))
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+    catch
+    {
+        return Array.Empty<string>();
+    }
+}
+
+static string InventoryName(string rootDirectory, string path)
+{
+    string relativePath = Path.GetRelativePath(rootDirectory, path);
+    string? withoutExtension = Path.ChangeExtension(relativePath, null);
+    return (withoutExtension ?? relativePath).TrimEnd('.');
+}
+
+static InventoryEntry[] MergeInventory(string[] discovered, string[] allowlisted)
+{
+    Dictionary<string, InventoryEntry> entries = new(StringComparer.OrdinalIgnoreCase);
+
+    foreach (string name in discovered)
+    {
+        entries[name] = new InventoryEntry(name, allowlisted.Contains(name, StringComparer.OrdinalIgnoreCase), "bettergi");
+    }
+
+    foreach (string name in allowlisted)
+    {
+        entries[name] = entries.TryGetValue(name, out InventoryEntry? existing)
+            ? existing with { Allowed = true }
+            : new InventoryEntry(name, true, "policy");
+    }
+
+    return entries.Values.OrderBy(entry => entry.Name, StringComparer.OrdinalIgnoreCase).ToArray();
 }
 
 static int ClampTail(int tail)
@@ -431,3 +576,5 @@ internal sealed class RpcException : Exception
 
     public int Code { get; }
 }
+
+internal sealed record InventoryEntry(string Name, bool Allowed, string Source);

@@ -32,9 +32,10 @@
 
 ## M4: BetterGI Adapter
 
+- Document BetterGI and AutoBGI integration surfaces. Done in `docs/adapters`.
 - Add config-driven BetterGI path detection. Done in runner scaffold.
 - Read BetterGI logs. Done for configured log directories.
-- List allowlisted scripts/tasks. Done through policy context.
+- List BetterGI one-dragon/script-group inventory with allowlist state. Done through runner inventory scanning and policy context.
 - Start allowlisted jobs.
 - Track job status.
 

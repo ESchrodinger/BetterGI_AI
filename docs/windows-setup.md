@@ -76,6 +76,22 @@ Expected: one JSON-RPC response with `protocolVersion`, `runner`, `bettergi`, an
 
 Create a local config copied from `examples/windows-local.config.json` and adjust paths for the Windows machine. Do not commit local machine paths or secrets unless they are generic examples.
 
+The runner can infer BetterGI subdirectories from `installPath`, but explicit paths are useful when the install layout differs:
+
+```json
+{
+  "bettergi": {
+    "installPath": "C:\\Program Files\\BetterGI",
+    "executablePath": "C:\\Program Files\\BetterGI\\BetterGI.exe",
+    "logDirectory": "C:\\Program Files\\BetterGI\\log",
+    "userDirectory": "C:\\Program Files\\BetterGI\\User",
+    "oneDragonDirectory": "C:\\Program Files\\BetterGI\\User\\OneDragon",
+    "scriptGroupDirectory": "C:\\Program Files\\BetterGI\\User\\ScriptGroup",
+    "scriptDirectory": "C:\\Program Files\\BetterGI\\User\\JsScript"
+  }
+}
+```
+
 Recommended local file name:
 
 ```text

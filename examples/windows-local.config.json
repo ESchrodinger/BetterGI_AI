@@ -10,8 +10,11 @@
   "bettergi": {
     "installPath": "C:\\Program Files\\BetterGI",
     "executablePath": "C:\\Program Files\\BetterGI\\BetterGI.exe",
-    "logDirectory": "C:\\Users\\zjiang\\AppData\\Roaming\\BetterGI\\logs",
-    "scriptDirectory": "C:\\Users\\zjiang\\AppData\\Roaming\\BetterGI\\scripts"
+    "logDirectory": "C:\\Program Files\\BetterGI\\log",
+    "userDirectory": "C:\\Program Files\\BetterGI\\User",
+    "oneDragonDirectory": "C:\\Program Files\\BetterGI\\User\\OneDragon",
+    "scriptGroupDirectory": "C:\\Program Files\\BetterGI\\User\\ScriptGroup",
+    "scriptDirectory": "C:\\Program Files\\BetterGI\\User\\JsScript"
   },
   "policy": {
     "allowTasks": [],

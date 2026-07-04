@@ -37,6 +37,41 @@ function Invoke-Tool {
   }
 }
 
+function Invoke-RunnerRpc {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$RunnerExe,
+    [Parameter(Mandatory = $true)]
+    [string]$Request
+  )
+
+  $ProcessStartInfo = [System.Diagnostics.ProcessStartInfo]::new()
+  $ProcessStartInfo.FileName = $RunnerExe
+  $ProcessStartInfo.Arguments = "rpc --stdio"
+  $ProcessStartInfo.RedirectStandardInput = $true
+  $ProcessStartInfo.RedirectStandardOutput = $true
+  $ProcessStartInfo.RedirectStandardError = $true
+  $ProcessStartInfo.UseShellExecute = $false
+
+  $Process = [System.Diagnostics.Process]::Start($ProcessStartInfo)
+  $Process.StandardInput.WriteLine($Request)
+  $Process.StandardInput.Close()
+
+  $Stdout = $Process.StandardOutput.ReadToEnd()
+  $Stderr = $Process.StandardError.ReadToEnd()
+  $Process.WaitForExit()
+
+  if ($Process.ExitCode -ne 0) {
+    throw "runner exited with code $($Process.ExitCode): $Stderr"
+  }
+
+  if (-not [string]::IsNullOrWhiteSpace($Stderr)) {
+    Write-Host $Stderr
+  }
+
+  return $Stdout.Trim()
+}
+
 $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 Set-Location $RepoRoot
 $DotnetCliHome = Join-Path $RepoRoot ".dotnet-cli"
@@ -130,7 +165,7 @@ $DetectRequest = @{
   }
 } | ConvertTo-Json -Depth 12 -Compress
 
-$DetectResponse = $DetectRequest | & $RunnerExe rpc --stdio
+$DetectResponse = Invoke-RunnerRpc -RunnerExe $RunnerExe -Request $DetectRequest
 Write-Host $DetectResponse
 
 $ParsedDetect = $DetectResponse | ConvertFrom-Json
@@ -151,7 +186,7 @@ $DryRunRequest = @{
   }
 } | ConvertTo-Json -Depth 12 -Compress
 
-$DryRunResponse = $DryRunRequest | & $RunnerExe rpc --stdio
+$DryRunResponse = Invoke-RunnerRpc -RunnerExe $RunnerExe -Request $DryRunRequest
 Write-Host $DryRunResponse
 
 $ParsedDryRun = $DryRunResponse | ConvertFrom-Json

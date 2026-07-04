@@ -1,0 +1,4 @@
+interface:
+  display_name: "AutoBGI Safe Control"
+  short_description: "Safely control AutoBGI MCP"
+  default_prompt: "Use $autobgi-safe-control to check AutoBGI status and run an allowed BetterGI task safely."

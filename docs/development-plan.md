@@ -41,10 +41,18 @@
 
 ## M5: Skill and Operational Rules
 
+- Create an AutoBGI safe-control skill for quick landing. Done in `skills/autobgi-safe-control`.
 - Teach agents to call detection before mutating tasks.
 - Require log inspection before retries.
 - Require allowlisted task names.
 - Prefer stop over repeated corrective actions.
+
+## M5a: AutoBGI Fast Path
+
+- Use AutoBGI MCP as the first practical control path.
+- Restrict agents to `findBgiIndex`, `queryBackpack`, and immediate `RunCronTask` for allowlisted one-dragon/config-group launches.
+- Keep shutdown, backup, updates, arbitrary cron, hotkeys, config mutation, recording, and remote-control operations out of the skill.
+- Later, move these rules into a BetterGI AI `autobgi` adapter for programmatic enforcement.
 
 ## M6: Release Hardening
 

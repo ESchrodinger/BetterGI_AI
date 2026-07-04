@@ -98,6 +98,37 @@ Important fields:
 
 When adding/removing/reordering projects, normalize `index` to sequential 1-based values.
 
+## Callable Inventory
+
+A script group can reference only resources BetterGI can resolve from its `User` directory.
+
+Callable project types:
+
+| Type | Inventory source | Project fields |
+| --- | --- | --- |
+| `Pathing` | `User\AutoPathing\**\*.json` | `name` is file name, `folderName` is the relative folder under `User\AutoPathing` |
+| `Javascript` | `User\JsScript\<folder>\manifest.json` | `name` is manifest name, `folderName` is the script folder |
+| `KeyMouse` | `User\KeyMouseScript\*` | `name` and `folderName` normally use the file name |
+| `Shell` | free-form command string | high risk; do not create unless the user explicitly requests shell execution |
+
+Before adding a project, inventory the relevant source and verify the referenced file/folder exists. Do not guess `folderName` from UI labels.
+
+Use the bundled script for reliable inventory:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File skills\bettergi-config-editor\scripts\list_bettergi_inventory.ps1 -InstallPath "C:\Program Files\BetterGI" -Search "子探测单元" -Limit 20
+```
+
+The script returns JSON with:
+
+- `counts`: callable totals by type
+- `topPathingFolders`: top pathing categories
+- `callableItems`: project entries ready to map into `projects`
+- `scriptGroups`: existing groups and project counts
+- `oneDragons`: existing one-dragon configs
+
+When building a `Pathing` project entry from inventory, copy `name` and `folderName` exactly.
+
 ## Create Empty Script Group
 
 Use this when the user asks to add a new config group.
@@ -153,4 +184,3 @@ If text displays as mojibake, retry with explicit UTF-8 before concluding the fi
 ## Response Style
 
 Be precise. State the file path, what changed, backup path, validation result, and any remaining risk. Do not paste large full JSON files unless the user asks; summarize structure and key changed fields.
-

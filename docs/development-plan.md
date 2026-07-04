@@ -42,6 +42,7 @@
 ## M5: Skill and Operational Rules
 
 - Create an AutoBGI safe-control skill for quick landing. Done in `skills/autobgi-safe-control`.
+- Create a BetterGI config-editor skill for local JSON configuration edits. Done in `skills/bettergi-config-editor`.
 - Teach agents to call detection before mutating tasks.
 - Require log inspection before retries.
 - Require allowlisted task names.
@@ -53,6 +54,13 @@
 - Restrict agents to `findBgiIndex`, `queryBackpack`, and immediate `RunCronTask` for allowlisted one-dragon/config-group launches.
 - Keep shutdown, backup, updates, arbitrary cron, hotkeys, config mutation, recording, and remote-control operations out of the skill.
 - Later, move these rules into a BetterGI AI `autobgi` adapter for programmatic enforcement.
+
+## M5b: BetterGI Config Editing
+
+- Treat BetterGI config editing as a first-party BetterGI AI capability because AutoBGI MCP does not expose it.
+- Start with local JSON structure knowledge for `User\ScriptGroup` and `User\OneDragon`.
+- Require UTF-8 reads/writes, backups, diff-style summaries, and post-write JSON validation.
+- Later, move safe edit operations into runner methods so policy is enforced in code, not only in skills.
 
 ## M6: Release Hardening
 

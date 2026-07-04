@@ -73,6 +73,40 @@ BetterGI.exe --startGroups "group-a" "group-b"
 
 `ScriptService.RunMulti` handles the actual execution and task progress tracking. BetterGI AI should expose only configured/allowlisted group names, not arbitrary folder paths or script names.
 
+Observed script group JSON structure:
+
+```json
+{
+  "index": 1,
+  "name": "aitest",
+  "config": {
+    "pathingConfig": {},
+    "shellConfig": {},
+    "enableShellConfig": false
+  },
+  "projects": []
+}
+```
+
+`projects` entries reference route/script files rather than embedding full route content. A pathing entry uses:
+
+```json
+{
+  "name": "01-route.json",
+  "folderName": "relative\\path\\under\\User\\AutoPathing",
+  "jsScriptSettingsObject": null,
+  "index": 1,
+  "type": "Pathing",
+  "status": "Enabled",
+  "schedule": "Daily",
+  "runNum": 1,
+  "allowJsNotification": true,
+  "allowJsHTTPHash": ""
+}
+```
+
+Config editing should become a BetterGI AI capability because AutoBGI MCP does not expose it. Safe editing requires UTF-8 structured parsing, backups, diff summaries, and post-write validation.
+
 ## Process Behavior
 
 BetterGI is a WPF desktop app and uses a single-instance model. Command-line runs navigate the existing UI flow when the application starts; the exact behavior when another BetterGI instance is already running must be tested on the user's installed build.
@@ -107,7 +141,6 @@ Do not expose:
 
 - arbitrary process execution
 - arbitrary PowerShell/cmd/bat execution
-- editing BetterGI `User` files
+- unrestricted editing of BetterGI `User` files
 - raw hotkey/mouse/keyboard actions
 - task progress resume until storage and validation are understood
-

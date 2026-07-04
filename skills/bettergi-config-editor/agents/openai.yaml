@@ -1,0 +1,4 @@
+interface:
+  display_name: "BetterGI Config Editor"
+  short_description: "Safely edit BetterGI JSON configs"
+  default_prompt: "Use $bettergi-config-editor to inspect or safely modify a BetterGI config group."

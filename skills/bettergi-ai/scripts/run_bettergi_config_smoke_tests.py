@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
-from bettergi_common import json_dump, resolve_bettergi_install_path
+from bettergi_common import json_dump, resolve_bettergi_install_path, write_json
+from edit_bettergi_one_dragon import new_one_dragon_config
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -15,6 +18,107 @@ ONE_DRAGON = SCRIPT_DIR / "edit_bettergi_one_dragon.py"
 SCRIPT_GROUP = SCRIPT_DIR / "edit_bettergi_script_group.py"
 INVENTORY = SCRIPT_DIR / "list_bettergi_inventory.py"
 REPO_SEARCH = SCRIPT_DIR / "search_bettergi_repo.py"
+
+
+def write_fixture_json(path: Path, value: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    write_json(path, value)
+
+
+def create_fixture_install(root: Path) -> Path:
+    install_path = root / "BetterGI"
+    domain_name = "霜凝的机枢"
+    group_name = "ai_combat_demo"
+
+    write_fixture_json(
+        install_path / "GameTask" / "AutoTrackPath" / "Assets" / "tp.json",
+        {
+            "data": [
+                {
+                    "mapName": "Teyvat",
+                    "points": [
+                        {
+                            "type": "BlessDomain",
+                            "name": domain_name,
+                            "country": "枫丹",
+                        }
+                    ],
+                }
+            ]
+        },
+    )
+
+    default_config = new_one_dragon_config("默认配置")
+    default_config["TaskEnabledList"] = {"领取邮件": True}
+    write_fixture_json(install_path / "User" / "OneDragon" / "默认配置.json", default_config)
+
+    write_fixture_json(
+        install_path / "User" / "ScriptGroup" / f"{group_name}.json",
+        {
+            "index": 1,
+            "name": group_name,
+            "config": {
+                "pathingConfig": {
+                    "autoFightEnabled": True,
+                    "autoFightConfig": {
+                        "strategyName": "群友分享\\万能战斗策略（萌新推荐）",
+                    },
+                },
+                "shellConfig": {},
+                "enableShellConfig": False,
+            },
+            "projects": [],
+        },
+    )
+
+    pathing_file = (
+        install_path
+        / "User"
+        / "AutoPathing"
+        / "敌人与魔物\\史莱姆"
+        / "史莱姆速刷.json"
+    )
+    write_fixture_json(pathing_file, {"name": "史莱姆速刷"})
+    write_fixture_json(
+        install_path / "User" / "AutoFight" / "群友分享" / "万能战斗策略（萌新推荐）.json",
+        {"name": "万能战斗策略（萌新推荐）"},
+    )
+
+    repo_root = install_path / "Repos" / "bettergi-scripts-list"
+    write_fixture_json(
+        repo_root / "repo.json",
+        {
+            "time": "fixture",
+            "indexes": [
+                {
+                    "name": "pathing",
+                    "type": "directory",
+                    "children": [
+                        {
+                            "name": "敌人与魔物",
+                            "type": "directory",
+                            "children": [
+                                {
+                                    "name": "史莱姆",
+                                    "type": "directory",
+                                    "children": [
+                                        {
+                                            "name": "史莱姆速刷.json",
+                                            "type": "file",
+                                            "description": "fixture pathing route for slime",
+                                            "author": "fixture",
+                                            "tags": ["史莱姆"],
+                                        }
+                                    ],
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+        },
+    )
+    return install_path
 
 
 def run_json(args: list[str]) -> dict[str, Any]:
@@ -53,10 +157,30 @@ def assert_true(condition: bool, message: str) -> None:
 
 
 def main() -> None:
-    install_path = resolve_bettergi_install_path("")
-    results: list[dict[str, Any]] = []
+    parser = argparse.ArgumentParser(
+        description="Run BetterGI config helper smoke tests against a real install or fixture."
+    )
+    parser.add_argument("--install-path", default="")
+    parser.add_argument(
+        "--keep-fixture",
+        action="store_true",
+        help="Keep the generated temporary fixture directory for debugging.",
+    )
+    args = parser.parse_args()
 
-    options = run_json([str(ONE_DRAGON), "--list-options"])
+    temp_dir: tempfile.TemporaryDirectory[str] | None = None
+    if args.install_path:
+        install_path = resolve_bettergi_install_path(args.install_path)
+        fixture = False
+    else:
+        temp_dir = tempfile.TemporaryDirectory(prefix="bettergi-ai-smoke-")
+        install_path = create_fixture_install(Path(temp_dir.name))
+        fixture = True
+
+    results: list[dict[str, Any]] = []
+    base_args = ["--install-path", str(install_path)]
+
+    options = run_json([str(ONE_DRAGON), *base_args, "--list-options"])
     domains = {item["name"] for item in options["domains"]}
     script_groups = set(options["scriptGroups"])
     assert_true(domains, "BetterGI domain options should not be empty")
@@ -208,14 +332,15 @@ def main() -> None:
         ),
     ]
 
-    for label, args, check in one_dragon_cases:
-        output = run_json([str(ONE_DRAGON), *args])
+    for label, case_args, check in one_dragon_cases:
+        output = run_json([str(ONE_DRAGON), *base_args, *case_args])
         assert_true(check(output), f"one-dragon case failed: {label}")
         results.append({"case": label, "changedFields": output["changedFields"]})
 
     group_output = run_json(
         [
             str(SCRIPT_GROUP),
+            *base_args,
             "--group-name", "ai_smoke_group",
             "--create",
             "--add-project", r"Pathing|史莱姆速刷.json|敌人与魔物\史莱姆",
@@ -233,6 +358,7 @@ def main() -> None:
     invalid_domain_error = run_expect_failure(
         [
             str(ONE_DRAGON),
+            *base_args,
             "--config-name", "ai_smoke_invalid_domain",
             "--copy-from", "默认配置",
             "--only-task", "自动秘境",
@@ -246,6 +372,7 @@ def main() -> None:
     invalid_group_error = run_expect_failure(
         [
             str(ONE_DRAGON),
+            *base_args,
             "--config-name", "ai_smoke_invalid_group",
             "--copy-from", "默认配置",
             "--only-task", "__不存在的配置组__",
@@ -255,17 +382,28 @@ def main() -> None:
     assert_true("__不存在的配置组__" in invalid_group_error, "invalid group should be named in error")
     results.append({"case": "负例-未知配置组", "status": "rejected"})
 
-    inventory = run_json([str(INVENTORY), "--search", "史莱姆", "--limit", "5"])
+    inventory = run_json([str(INVENTORY), *base_args, "--search", "史莱姆", "--limit", "5"])
     assert_true(inventory["counts"]["callableTotal"] >= 1, "inventory search should find callable items")
     results.append({"case": "本地库存搜索", "returned": len(inventory["callableItems"])})
 
     try:
-        repo = run_json([str(REPO_SEARCH), "--search", "史莱姆", "--include-directories", "--limit", "5"])
+        repo = run_json(
+            [str(REPO_SEARCH), *base_args, "--search", "史莱姆", "--include-directories", "--limit", "5"]
+        )
         results.append({"case": "仓库索引搜索", "returned": repo["returned"]})
     except Exception as exc:
         results.append({"case": "仓库索引搜索", "skipped": str(exc)})
 
-    print(json_dump({"installPath": str(install_path), "passed": len(results), "results": results}))
+    output = {
+        "installPath": str(install_path),
+        "fixture": fixture,
+        "passed": len(results),
+        "results": results,
+    }
+    if temp_dir and args.keep_fixture:
+        output["fixturePath"] = temp_dir.name
+        temp_dir = None
+    print(json_dump(output))
 
 
 if __name__ == "__main__":

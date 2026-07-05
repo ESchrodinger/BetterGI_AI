@@ -64,6 +64,14 @@ Run BetterGI config helper smoke tests:
 python skills/bettergi-ai/scripts/run_bettergi_config_smoke_tests.py
 ```
 
+By default this creates a temporary BetterGI fixture so the helper logic can be
+validated on macOS, Linux, or Windows without a real BetterGI installation.
+Validate against a real BetterGI install when available:
+
+```bash
+python skills/bettergi-ai/scripts/run_bettergi_config_smoke_tests.py --install-path "C:\Program Files\BetterGI"
+```
+
 Probe AutoBGI MCP tools:
 
 ```bash

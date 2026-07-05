@@ -14,7 +14,7 @@ BetterGI AI is a BetterGI + AutoBGI companion, not a replacement execution-engin
 - Added BetterGI install and AutoBGI MCP local settings discovery.
 - Added Python helpers for local BetterGI inventory, one-dragon edits, script-group edits, subscriptions, repository search, lifecycle checks, status summaries, and AutoBGI MCP probing.
 - Added top-level and focused skills for setup, status, lifecycle, config editing, script repository work, one-dragon configuration, and AutoBGI safe control.
-- Validated BetterGI config smoke tests against local JSON fixtures and human-confirmed BetterGI UI cases.
+- Validated BetterGI config smoke tests against generated local JSON fixtures and human-confirmed BetterGI UI cases.
 - Validated AutoBGI MCP handshake, `tools/list`, and `findBgiIndex`.
 
 ## Next

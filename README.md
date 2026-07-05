@@ -18,7 +18,22 @@ The package contains:
 - `references/`: internal focused guides for setup, status, lifecycle, config editing, one-dragon, and AutoBGI safe control.
 - `scripts/`: deterministic Python helpers for BetterGI JSON and AutoBGI MCP.
 
-See `SKILLS.md` for the internal routing map.
+## Internal Architecture
+
+`bettergi-ai` is the single outer skill. It routes internally to focused references:
+
+```text
+skills/bettergi-ai/SKILL.md
+  -> references/setup.md
+  -> references/status.md
+  -> references/lifecycle.md
+  -> references/config-editor.md
+  -> references/one-dragon.md
+  -> references/autobgi-safe-control.md
+  -> scripts/*.py
+```
+
+Agents should load only the reference needed for the user's request.
 
 ## Local Settings
 

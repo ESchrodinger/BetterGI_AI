@@ -78,6 +78,12 @@ Probe AutoBGI MCP tools:
 python skills/bettergi-ai/scripts/probe_autobgi_mcp.py --output .bettergi-ai/status/autobgi-tools.json
 ```
 
+Validate AutoBGI MCP tool policy offline:
+
+```bash
+python skills/bettergi-ai/scripts/run_autobgi_policy_smoke_tests.py
+```
+
 Read AutoBGI progress and summarize safe capabilities:
 
 ```bash

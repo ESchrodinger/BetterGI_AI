@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import queue
+import sys
 import threading
 import time
 import urllib.error
@@ -13,6 +14,15 @@ from typing import Any
 
 
 DEFAULT_SETTINGS_PATH = Path(".bettergi-ai") / "local.settings.json"
+READ_ONLY_TOOLS = {"findBgiIndex", "queryBackpack", "queryCharacterBuild"}
+ALLOWED_RUN_CRON_TASK_NAMES = {"启动一条龙", "启动配置组"}
+DISABLED_TOOLS = {
+    "continueOneDragon",
+    "startObsRecording",
+    "stopObsRecording",
+    "collectMaterialRoutes",
+    "collectCookingRoutes",
+}
 
 
 class McpProbeError(RuntimeError):
@@ -230,6 +240,62 @@ def tool_names(tools: list[dict[str, Any]]) -> list[str]:
     return names
 
 
+def validate_tool_call_policy(
+    name: str,
+    arguments: dict[str, Any],
+    *,
+    allow_screenshot: bool = False,
+    confirm_run: bool = False,
+) -> dict[str, Any]:
+    if name in DISABLED_TOOLS:
+        raise McpProbeError(f"AutoBGI MCP tool is disabled by BetterGI AI policy: {name}")
+
+    if name == "captureDesktopScreenshot":
+        if not allow_screenshot:
+            raise McpProbeError(
+                "captureDesktopScreenshot requires --allow-screenshot because it can expose screen contents"
+            )
+        return {"allowed": True, "policy": "explicit visual verification"}
+
+    if name == "queryBackpack":
+        material_name = str(arguments.get("materialName") or "").strip()
+        if not material_name:
+            raise McpProbeError("queryBackpack requires a non-empty materialName")
+        return {"allowed": True, "policy": "read-only material query", "materialName": material_name}
+
+    if name == "queryCharacterBuild":
+        character_name = str(arguments.get("characterName") or "").strip()
+        if not character_name:
+            raise McpProbeError("queryCharacterBuild requires one non-empty characterName")
+        return {"allowed": True, "policy": "read-only single character query", "characterName": character_name}
+
+    if name == "RunCronTask":
+        task_name = str(arguments.get("taskName") or "").strip()
+        target = str(arguments.get("params") or "").strip()
+        delay = arguments.get("delayInSeconds")
+        if task_name not in ALLOWED_RUN_CRON_TASK_NAMES:
+            raise McpProbeError(
+                "RunCronTask is allowed only for 启动一条龙 or 启动配置组"
+            )
+        if not target:
+            raise McpProbeError("RunCronTask requires params to be the exact approved target name")
+        if delay != 0:
+            raise McpProbeError("RunCronTask requires delayInSeconds=0")
+        if not confirm_run:
+            raise McpProbeError("RunCronTask requires --confirm-run after exact user approval")
+        return {
+            "allowed": True,
+            "policy": "confirmed immediate launch",
+            "taskName": task_name,
+            "target": target,
+        }
+
+    if name in READ_ONLY_TOOLS:
+        return {"allowed": True, "policy": "read-only"}
+
+    raise McpProbeError(f"AutoBGI MCP tool is not in the BetterGI AI safe subset: {name}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Probe AutoBGI MCP over SSE.")
     parser.add_argument("--settings", default=str(DEFAULT_SETTINGS_PATH))
@@ -238,8 +304,36 @@ def main() -> int:
     parser.add_argument("--timeout", type=float, default=10.0)
     parser.add_argument("--call-tool", help="Optionally call one MCP tool after tools/list.")
     parser.add_argument("--arguments", type=parse_json_arg, default={})
+    parser.add_argument(
+        "--allow-screenshot",
+        action="store_true",
+        help="Allow captureDesktopScreenshot after explicit visual-verification request.",
+    )
+    parser.add_argument(
+        "--confirm-run",
+        action="store_true",
+        help="Confirm the user explicitly approved the exact RunCronTask target.",
+    )
+    parser.add_argument(
+        "--policy-only",
+        action="store_true",
+        help="Validate --call-tool policy and print the decision without connecting to AutoBGI.",
+    )
     parser.add_argument("--output", help="Write full JSON probe result to this path.")
     args = parser.parse_args()
+
+    policy: dict[str, Any] | None = None
+    if args.call_tool:
+        policy = validate_tool_call_policy(
+            args.call_tool,
+            args.arguments,
+            allow_screenshot=args.allow_screenshot,
+            confirm_run=args.confirm_run,
+        )
+
+    if args.policy_only:
+        print(json.dumps({"tool": args.call_tool, "policy": policy}, ensure_ascii=False, indent=2))
+        return 0
 
     url, api_key = resolve_mcp_config(args)
     result: dict[str, Any] = {
@@ -256,8 +350,11 @@ def main() -> int:
         result["tools"] = tools
         result["toolNames"] = tool_names(tools)
         if args.call_tool:
+            if args.call_tool == "RunCronTask":
+                result["preflightFindBgiIndex"] = client.call_tool("findBgiIndex", {})
             result["toolCall"] = {
                 "name": args.call_tool,
+                "policy": policy,
                 "result": client.call_tool(args.call_tool, args.arguments),
             }
 
@@ -277,4 +374,17 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except McpProbeError as exc:
+        print(
+            json.dumps(
+                {
+                    "error": str(exc),
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            file=sys.stderr,
+        )
+        raise SystemExit(1)

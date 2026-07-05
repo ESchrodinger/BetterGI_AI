@@ -16,6 +16,7 @@ BetterGI AI is a BetterGI + AutoBGI companion, not a replacement execution-engin
 - Added top-level and focused skills for setup, status, lifecycle, config editing, script repository work, one-dragon configuration, and AutoBGI safe control.
 - Validated BetterGI config smoke tests against generated local JSON fixtures and human-confirmed BetterGI UI cases.
 - Validated AutoBGI MCP handshake, `tools/list`, and `findBgiIndex`.
+- Added offline AutoBGI MCP policy smoke tests for the safe tool subset and rejected tools.
 
 ## Next
 

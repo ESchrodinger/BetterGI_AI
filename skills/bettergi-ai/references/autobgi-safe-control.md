@@ -8,6 +8,12 @@ Probe tools:
 python scripts/probe_autobgi_mcp.py --output .bettergi-ai/status/autobgi-tools.json
 ```
 
+Validate policy without connecting to AutoBGI:
+
+```bash
+python scripts/run_autobgi_policy_smoke_tests.py
+```
+
 Allowed tools:
 
 - `findBgiIndex`
@@ -34,6 +40,15 @@ Allowed launch shape:
   "params": "<one exact user-approved target name>",
   "delayInSeconds": 0
 }
+```
+
+CLI launch shape:
+
+```bash
+python scripts/probe_autobgi_mcp.py \
+  --call-tool RunCronTask \
+  --confirm-run \
+  --arguments '{"taskName":"启动一条龙","params":"默认配置","delayInSeconds":0}'
 ```
 
 Before launch:

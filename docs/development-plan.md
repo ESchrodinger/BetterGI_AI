@@ -1,70 +1,26 @@
 # Development Plan
 
-## M0: Architecture and Protocol
+## Current Direction
 
-- Document module boundaries.
-- Define runner JSON-RPC protocol.
-- Define default safety policy.
-- Add local and SSH configuration examples.
+BetterGI AI is a BetterGI + AutoBGI companion, not a replacement execution-engine project.
 
-## M1: Project Skeleton
+- BetterGI remains the upstream automation app and local configuration source.
+- AutoBGI is the preferred execution service through MCP SSE.
+- BetterGI AI owns setup, local JSON config editing, repository search/subscriptions, status summaries, lifecycle guidance, and safe agent-facing rules.
 
-- Create protocol package.
-- Create MCP server package.
-- Create Windows runner project.
-- Create BetterGI agent skill.
+## Completed
 
-## M2: Runner MVP
+- Documented the BetterGI and AutoBGI integration surfaces.
+- Added BetterGI install and AutoBGI MCP local settings discovery.
+- Added Python helpers for local BetterGI inventory, one-dragon edits, script-group edits, subscriptions, repository search, lifecycle checks, status summaries, and AutoBGI MCP probing.
+- Added top-level and focused skills for setup, status, lifecycle, config editing, script repository work, one-dragon configuration, and AutoBGI safe control.
+- Validated BetterGI config smoke tests against local JSON fixtures and human-confirmed BetterGI UI cases.
+- Validated AutoBGI MCP handshake, `tools/list`, and `findBgiIndex`.
 
-- Implement `runner.detect`.
-- Implement `runner.status`.
-- Implement `runner.capabilities`.
-- Implement `runner.logs`.
-- Implement `runner.stop`.
+## Next
 
-## M3: MCP MVP
-
-- Implement MCP `initialize`.
-- Implement `tools/list`.
-- Implement `tools/call`.
-- Proxy accepted calls to runner over local stdio.
-- Add SSH stdio transport.
-
-## M4: BetterGI Adapter
-
-- Document BetterGI and AutoBGI integration surfaces. Done in `docs/adapters`.
-- Add config-driven BetterGI path detection. Done in runner scaffold.
-- Read BetterGI logs. Done for configured log directories.
-- List BetterGI one-dragon/script-group inventory with allowlist state. Done through runner inventory scanning and policy context.
-- Start allowlisted jobs.
-- Track job status.
-
-## M5: Skill and Operational Rules
-
-- Create an AutoBGI safe-control skill for quick landing. Done in `skills/autobgi-safe-control`.
-- Create a BetterGI config-editor skill for local JSON configuration edits. Done in `skills/bettergi-config-editor`.
-- Teach agents to call detection before mutating tasks.
-- Require log inspection before retries.
-- Require allowlisted task names.
-- Prefer stop over repeated corrective actions.
-
-## M5a: AutoBGI Fast Path
-
-- Use AutoBGI MCP as the first practical control path.
-- Restrict agents to `findBgiIndex`, `queryBackpack`, and immediate `RunCronTask` for allowlisted one-dragon/config-group launches.
-- Keep shutdown, backup, updates, arbitrary cron, hotkeys, config mutation, recording, and remote-control operations out of the skill.
-- Later, move these rules into a BetterGI AI `autobgi` adapter for programmatic enforcement.
-
-## M5b: BetterGI Config Editing
-
-- Treat BetterGI config editing as a first-party BetterGI AI capability because AutoBGI MCP does not expose it.
-- Start with local JSON structure knowledge for `User\ScriptGroup` and `User\OneDragon`.
-- Require UTF-8 reads/writes, backups, diff-style summaries, and post-write JSON validation.
-- Later, move safe edit operations into runner methods so policy is enforced in code, not only in skills.
-
-## M6: Release Hardening
-
-- Add tests for protocol and transport.
-- Add config schema validation.
-- Add Windows publish scripts.
-- Add setup documentation.
+- Validate `RunCronTask` end to end with one explicitly approved one-dragon or config-group target.
+- Add a dedicated collection-planner skill before enabling AutoBGI `collectMaterialRoutes` or `collectCookingRoutes`.
+- Add more focused tests for each one-dragon setting block.
+- Add install/copy guidance for publishing these skills into a user's Codex skill directory.
+- Add code-level policy enforcement only after the skill workflows stabilize.

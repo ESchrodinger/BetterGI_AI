@@ -1,52 +1,46 @@
 # Security and Safety
 
-This project controls local automation around a live game window. Treat it as a privileged local automation surface.
+This project controls local automation around BetterGI, AutoBGI, and a live game window. Treat it as a privileged local automation surface.
 
 ## Default Policy
 
-- Expose semantic tasks, not raw input primitives.
-- Require an allowlist for every mutating task or script.
-- Refuse unknown task names.
-- Allow only one mutating job at a time.
-- Keep an emergency stop path available.
-- Log task starts, stops, failures, and caller-provided arguments.
+- Expose semantic BetterGI/AutoBGI workflows, not raw input primitives.
+- Prefer read-only status and inventory before any mutation.
+- Require an exact user-approved target before starting one-dragon or config-group execution.
+- Refuse unknown task names and broad AutoBGI scheduler actions.
+- Use BetterGI's local JSON files as structured data; do not edit by ad hoc string replacement.
 - Keep secrets and machine-local paths out of Git.
 
 ## Agent Boundary
 
-Agents should call MCP tools. They should not:
+Agents may:
+
+- inspect BetterGI local inventory
+- edit approved BetterGI JSON config files with backups
+- search local BetterGI repository indexes
+- call the safe AutoBGI MCP subset
+
+Agents must not:
 
 - directly send keyboard or mouse events
-- modify BetterGI internals
-- run arbitrary scripts
-- bypass task allowlists
-- retry failed automation loops without reading logs
+- run arbitrary shell, PowerShell, Python, BAT, or JS through AutoBGI
+- modify account credentials, cookies, API keys, or game settings
+- start unknown or broad scheduler tasks
+- retry failed automation loops without reading status/log context
 
-## SSH Boundary
+## Data Boundary
 
-When using `ssh-stdio`, the SSH user should be a dedicated Windows user or a user with the minimum practical privileges.
+Do not commit:
 
-Recommended practices:
-
-- use key-based auth
-- restrict the remote command where practical
-- keep the runner under a known install path
-- avoid exposing a public network listener
-
-## Logs
-
-Logs can reveal local paths, account names, game state, or screenshots. Do not commit:
-
-- BetterGI logs
-- screenshots or captures
+- `.bettergi-ai/`
 - `.env` files
-- `*.local.json`
-- SSH keys or tokens
+- BetterGI or AutoBGI logs
+- screenshots or captures
+- cookies, API keys, tokens, UIDs tied to accounts, or other secrets
+- BetterGI `User` data from a real user profile
 
-## Future Hardening
+## Higher-Risk Tools
 
-- Signed runner releases.
-- Config schema validation.
-- Job audit log with redaction.
-- Optional confirmation prompts for high-risk tasks.
-- Read-only dry-run mode for inventory and detection.
+- `captureDesktopScreenshot` is allowed only when the user asks for visual verification and may expose visible desktop/app data.
+- `queryCharacterBuild` is allowed only for one named character requested by the user and may depend on local AutoBGI account configuration.
+- `collectMaterialRoutes` and `collectCookingRoutes` are disabled until a dedicated route-planning policy exists.

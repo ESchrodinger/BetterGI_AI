@@ -1,7 +1,7 @@
 <type>(<scope>): <summary>
 
 # types: feat, fix, docs, refactor, test, chore, build, ci
-# scope examples: mcp, runner, protocol, transport, adapter, skill
+# scope examples: skill, config, docs, autobgi, bettergi
 #
 # Body: explain why the change exists and any important tradeoffs.
 #

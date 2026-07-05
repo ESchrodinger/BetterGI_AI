@@ -1,55 +1,75 @@
 # BetterGI AI
 
-Portable agent control plane for integrating BetterGI with MCP servers, skills, and local or SSH-based runners.
+BetterGI AI is a single Codex skill package and local helper toolkit for pairing BetterGI with AutoBGI.
 
-## Git Workflow
+It does not replace BetterGI, reimplement game automation, or build a separate execution engine. BetterGI stays as the upstream desktop automation app. AutoBGI is the preferred execution service through its MCP SSE endpoint.
 
-- Keep `main` as the stable integration branch.
-- Use short feature branches such as `codex/setup-runner`, `codex/mcp-server`, or `codex/ssh-transport`.
-- Use conventional commits with the repository template:
-  - `feat(mcp): add status tool`
-  - `fix(runner): handle missing BetterGI process`
-  - `docs(skill): describe safe task invocation`
-- Keep machine-local settings in `*.local.json` or `.env`; commit example files instead.
+## Published Skill
 
-## Planned Modules
+Install or copy only this directory:
 
-- `packages/mcp-server`: cross-platform MCP server exposed to agents.
-- `packages/runner`: Windows-side runner that talks to BetterGI.
-- `packages/protocol`: shared JSON schemas and transport contracts.
-- `skills/bettergi-agent`: agent usage guide and safety rules.
-
-## Current Skeleton
-
-- `docs/architecture.md`: module boundaries and BetterGI separation rules.
-- `docs/protocol.md`: runner JSON-RPC method contract.
-- `docs/security.md`: default safety and allowlist policy.
-- `examples/dev-mock.config.json`: local mock config for development on macOS.
-- `examples/windows-local.config.json`: Windows local runner config shape.
-- `examples/mac-ssh.config.json`: macOS-to-Windows SSH config shape.
-- `packages/mcp-server`: MCP tools for detection, logs, tasks, scripts, and job lookup.
-- `packages/runner`: Windows runner scaffold with path/process/log detection and allowlist checks.
-
-The runner currently supports task/script dry-runs and allowlist validation. Real BetterGI task execution is intentionally blocked until a concrete adapter is added.
-
-## Development Commands
-
-Run the MCP smoke test against the local mock runner:
-
-```bash
-npm test
+```text
+skills/bettergi-ai
 ```
 
-Start the MCP server with the local mock runner:
+The package contains:
 
-```bash
-npm run mcp:dev
+- `SKILL.md`: the only installed skill entry point.
+- `references/`: internal focused guides for setup, status, lifecycle, config editing, one-dragon, and AutoBGI safe control.
+- `scripts/`: deterministic Python helpers for BetterGI JSON and AutoBGI MCP.
+
+See `SKILLS.md` for the internal routing map.
+
+## Local Settings
+
+Machine-local settings are kept out of Git. The helper scripts read `.bettergi-ai/local.settings.json` when present:
+
+```json
+{
+  "bettergi": {
+    "installPath": "C:\\Program Files\\BetterGI"
+  },
+  "autobgi": {
+    "installPath": "C:\\Tools\\autobgi",
+    "mcp": {
+      "url": "http://127.0.0.1:10086/mcp/sse",
+      "apiKey": "..."
+    }
+  }
+}
 ```
 
-Start only the mock runner:
+Do not commit real API keys, cookies, account data, logs, screenshots, or BetterGI user data.
+
+## Useful Commands
+
+Run BetterGI config helper smoke tests:
 
 ```bash
-npm run runner:mock
+python skills/bettergi-ai/scripts/run_bettergi_config_smoke_tests.py
 ```
 
-The production runner is scaffolded as a .NET 8 project under `packages/runner`; build and publish it on Windows or another host with the .NET SDK installed.
+Probe AutoBGI MCP tools:
+
+```bash
+python skills/bettergi-ai/scripts/probe_autobgi_mcp.py --output .bettergi-ai/status/autobgi-tools.json
+```
+
+Read AutoBGI progress and summarize safe capabilities:
+
+```bash
+python skills/bettergi-ai/scripts/probe_autobgi_mcp.py --call-tool findBgiIndex --output .bettergi-ai/status/findBgiIndex.json
+python skills/bettergi-ai/scripts/summarize_bettergi_capabilities.py --status-json .bettergi-ai/status/findBgiIndex.json
+```
+
+## Safety Shape
+
+The default AutoBGI MCP subset is:
+
+- `findBgiIndex`
+- `queryBackpack`
+- `captureDesktopScreenshot`, only when the user explicitly asks for visual verification
+- `queryCharacterBuild`, only for one user-requested character
+- `RunCronTask`, only for immediate `启动一条龙` or `启动配置组` with a user-approved target
+
+Everything else is disabled until a dedicated workflow and policy are added.

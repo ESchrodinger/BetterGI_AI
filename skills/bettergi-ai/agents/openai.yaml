@@ -1,0 +1,3 @@
+display_name: BetterGI AI
+short_description: Configure BetterGI and safely operate AutoBGI MCP.
+default_prompt: Use $bettergi-ai to inspect, configure, or safely run BetterGI through AutoBGI.

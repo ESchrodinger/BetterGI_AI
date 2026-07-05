@@ -1,120 +1,76 @@
 # Architecture
 
-BetterGI AI is a portable control plane that lets agents call BetterGI without forking or replacing BetterGI.
+BetterGI AI is one Codex skill package plus local helper scripts for BetterGI and AutoBGI.
 
 ## Goals
 
-- Keep BetterGI updateable as an upstream application.
-- Expose stable semantic tools to agents through MCP.
-- Support both local Windows execution and macOS-to-Windows execution over SSH.
-- Keep all game-adjacent automation on the Windows host that owns the game window.
-- Make every task observable, cancellable, and auditable.
+- Keep BetterGI updateable as the upstream desktop automation application.
+- Use AutoBGI as the preferred execution service through MCP SSE.
+- Let agents configure BetterGI through safe, backed-up JSON edits.
+- Let agents discover local BetterGI capabilities from installed files and repository indexes.
+- Keep execution narrow, observable, and user-approved.
 
 ## Non-Goals
 
-- Do not reimplement BetterGI computer vision, OCR, route execution, or input simulation.
+- Do not reimplement BetterGI OCR, computer vision, routing, combat, or input simulation.
 - Do not inject into the game process or read game memory.
-- Do not expose arbitrary low-level mouse or keyboard control to agents.
-- Do not require BetterGI source changes for the first usable version.
+- Do not expose raw mouse, keyboard, shell, PowerShell, or arbitrary process control.
+- Do not vendor BetterGI, AutoBGI, game data, logs, screenshots, cookies, or user secrets.
+- Do not build or maintain a replacement execution engine while AutoBGI covers the execution path.
 
 ## Layers
 
 ```text
-Agent host
-  MCP client
-    |
-    | Model Context Protocol
-    v
-packages/mcp-server
-    |
-    | local stdio or SSH stdio
-    v
-packages/runner
-    |
-    | adapter calls
-    v
-BetterGI upstream install
-    |
-    v
-Game window on Windows
+Agent
+  -> bettergi-ai skill
+      -> references/setup.md
+      -> references/status.md
+      -> references/lifecycle.md
+      -> references/config-editor.md
+      -> references/one-dragon.md
+      -> references/autobgi-safe-control.md
+      -> scripts/*.py
+          -> AutoBGI MCP SSE
+              -> AutoBGI
+                  -> BetterGI
+                      -> Genshin, if BetterGI opens it
 ```
 
-## MCP Server
+## BetterGI Local Files
 
-The MCP server is cross-platform. It owns the agent-facing tool names, validates arguments, applies policy, and forwards accepted calls to a configured runner transport.
+BetterGI remains installed outside this repository. The supported local surfaces are:
 
-Responsibilities:
+- `User\ScriptGroup`
+- `User\OneDragon`
+- `User\Subscriptions`
+- `User\AutoPathing`
+- `User\JsScript`
+- `User\AutoFight`
+- `Repos\<repo-folder>\repo.json`
+- `Repos\<repo-folder>\repo_updated.json`
 
-- Load local configuration.
-- Start a local runner or an SSH-backed runner process.
-- Expose only semantic BetterGI operations.
-- Normalize runner errors into tool results agents can reason about.
-- Avoid host-specific BetterGI assumptions.
+All writes must use structured JSON parsing, create backups where practical, and report changed fields.
 
-## Transport
+## AutoBGI MCP
 
-Transports connect the MCP server to the runner.
+AutoBGI is treated as a privileged local operations service. The safe default subset is:
 
-- `local-stdio`: start the runner directly on the same Windows host.
-- `ssh-stdio`: start the runner on a remote Windows host over SSH from macOS, Linux, or Windows.
+- read status through `findBgiIndex`
+- read one material count through `queryBackpack`
+- capture a desktop screenshot only when explicitly requested for visual verification
+- query one named character build only when explicitly requested
+- launch a validated one-dragon or config group through `RunCronTask`
 
-The protocol is newline-delimited JSON-RPC over stdin/stdout so the same runner command works locally and remotely.
-
-## Runner
-
-The runner is the Windows-side executable. It runs near BetterGI and has access to Windows process, window, filesystem, and future bridge APIs.
-
-Responsibilities:
-
-- Detect Windows, BetterGI, and game-window state.
-- Read configured BetterGI paths and logs.
-- Enforce a single active job lock.
-- Dispatch allowlisted BetterGI tasks or scripts.
-- Report status, logs, and structured failures.
-- Stop active jobs.
-
-## Adapters
-
-Adapters isolate BetterGI integration strategies from the runner core.
-
-- `filesystem`: read config, script inventory, and logs.
-- `process`: detect BetterGI and game processes.
-- `ui`: optional window/hotkey integration for early prototypes.
-- `bridge`: future stable local API if BetterGI exposes or accepts one.
-
-Adapters should be replaceable without changing the MCP tool contract.
-
-## BetterGI Separation
-
-BetterGI remains an upstream dependency installed outside this repository. This project should reference BetterGI through configuration:
-
-- install path
-- executable path
-- log directory
-- script directory
-- optional bridge endpoint
-
-Do not vendor BetterGI binaries, models, logs, captures, or user credentials.
-
-## Job Model
-
-A task run creates a job:
-
-- `jobId`: stable id returned to the caller
-- `status`: `queued`, `running`, `succeeded`, `failed`, `cancelled`
-- `startedAt` / `finishedAt`
-- `capability`: semantic operation being executed
-- `logRef`: source for tailing logs
-
-The runner must reject a second mutating job while one is active unless the operation is `stop`.
+Do not expose AutoBGI shutdown, backup, update, arbitrary cron, recording, hotkey, remote-control, broad account reads, or route collection tools by default.
 
 ## Versioning
 
-The public compatibility surfaces are:
+The compatibility surfaces are:
 
-- MCP tool names and schemas
-- runner JSON-RPC methods
-- configuration file shape
-- skill instructions
+- `skills/bettergi-ai/SKILL.md`
+- `skills/bettergi-ai/references/*.md`
+- helper script CLI arguments and JSON output
+- local settings shape
+- explicitly supported AutoBGI MCP tool names and schemas
 
-Breaking changes should update protocol version and examples together.
+Breaking changes should update docs and smoke tests together.

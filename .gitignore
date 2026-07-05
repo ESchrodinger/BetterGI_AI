@@ -15,6 +15,7 @@ Desktop.ini
 .env.*
 !.env.example
 *.local.json
+.bettergi-ai/
 secrets/
 
 # Logs and temporary output
@@ -22,23 +23,6 @@ secrets/
 logs/
 tmp/
 temp/
-
-# Node.js / TypeScript
-node_modules/
-dist/
-build/
-coverage/
-.npm/
-.pnpm-store/
-
-# .NET
-bin/
-obj/
-TestResults/
-.dotnet-cli/
-*.user
-*.suo
-*.rsuser
 
 # Python tooling
 __pycache__/
@@ -48,8 +32,10 @@ __pycache__/
 .venv/
 venv/
 
-# Local BetterGI runner artifacts
-runner-data/
+# Local tool caches
+.dotnet-cli/
+
+# Local BetterGI/AutoBGI artifacts
 captures/
 screenshots/
 artifacts/

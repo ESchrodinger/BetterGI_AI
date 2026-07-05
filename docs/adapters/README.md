@@ -1,44 +1,46 @@
-# Adapter Research
+# Integration Research
 
-This directory captures integration research for BetterGI AI adapters.
+This directory records how BetterGI AI pairs with BetterGI and AutoBGI.
 
 ## Current Decision
 
-Use AutoBGI safe-control skill as the fastest first usable path, while keeping direct BetterGI CLI and AutoBGI adapter work as later hardening paths.
+Publish one skill package: `skills/bettergi-ai`.
 
-| Option | Strength | Risk | Decision |
-| --- | --- | --- | --- |
-| AutoBGI safe-control skill | Fastest route to usable AI control; reuses AutoBGI MCP | Behavioral guardrails only; not a hard policy boundary | First landing path |
-| Direct BetterGI CLI | Uses BetterGI's own supported entry points; no extra service required | Sparse status feedback; needs careful process/log handling | Hardening path |
-| AutoBGI HTTP/MCP adapter | Rich status, Web UI, cron, logs, notifications | Broad privileged surface; AGPL code cannot be copied; another service to configure | Later hardening path |
-| Copy AutoBGI logic | Fast-looking shortcut | License and safety mismatch | Do not do |
+The package has one installed entry point, `SKILL.md`, and focused internal references for setup, status, lifecycle, BetterGI JSON configuration, script repository work, one-dragon settings, and constrained AutoBGI MCP execution.
 
-## Next Implementation Target
+AutoBGI is the primary execution path. BetterGI AI should configure BetterGI and AutoBGI, read BetterGI's local options dynamically, and call only the constrained AutoBGI MCP subset for status/query/launch.
 
-Create and iterate `skills/autobgi-safe-control` so agents can quickly operate the safe subset of AutoBGI MCP:
+## Package Architecture
 
-- read status through `findBgiIndex`
-- query backpack materials through `queryBackpack`
-- launch allowlisted one-dragon tasks through `RunCronTask`
-- launch allowlisted script/config groups through `RunCronTask`
+```text
+bettergi-ai/SKILL.md
+  -> references/setup.md
+  -> references/status.md
+  -> references/lifecycle.md
+  -> references/config-editor.md
+  -> references/one-dragon.md
+  -> references/autobgi-safe-control.md
+  -> scripts/*.py
+```
 
-Do not expose AutoBGI shutdown, backup, update, config mutation, arbitrary cron, hotkey, recording, or remote-control features through this fast path.
+The top-level skill chooses one reference and loads only what is needed.
 
-## Runner Hardening Target
+## AutoBGI MCP Safe Subset
 
-The runner should gain a `bettergi-cli` adapter that can:
+- `findBgiIndex`
+- `queryBackpack`
+- `captureDesktopScreenshot`, explicit visual verification only
+- `queryCharacterBuild`, one requested character only
+- `RunCronTask`, restricted to immediate `启动一条龙` or `启动配置组`
 
-- discover configured BetterGI install/log/user paths
-- list `User\OneDragon\*.json`
-- list `User\ScriptGroup\*.json`
-- tail BetterGI logs
-- report BetterGI process state
-- keep non-dry-run execution disabled until allowlist configuration exists
+Disabled until separate workflows exist:
 
-After that, enable allowlisted execution for:
-
-- `BetterGI.exe --startOneDragon <name>`
-- `BetterGI.exe --startGroups <name...>`
+- continuing one-dragon plans
+- shutdown/backup/sign-in/update/scheduler actions
+- OBS recording control
+- broad account data reads
+- material/cooking route collection
+- arbitrary shell or remote-control behavior
 
 See:
 

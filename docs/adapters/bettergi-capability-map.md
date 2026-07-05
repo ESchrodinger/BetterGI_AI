@@ -1,157 +1,62 @@
 # BetterGI Capability Map
 
-This document records what BetterGI itself appears to expose and how BetterGI AI should call it. It is based on the local upstream checkout at `tmp/better-genshin-impact`, inspected on 2026-07-05.
+BetterGI is the upstream desktop automation app. BetterGI AI should treat it as an installed external dependency and use its local files as the source of truth for configuration and available options.
 
-## Source Snapshot
+## Supported Local Surfaces
 
-Key upstream files inspected:
-
-- `BetterGenshinImpact/Helpers/CommandLineOptions.cs`
-- `BetterGenshinImpact/Service/ApplicationHostService.cs`
-- `BetterGenshinImpact/ViewModel/Pages/HomePageViewModel.cs`
-- `BetterGenshinImpact/ViewModel/Pages/OneDragonFlowViewModel.cs`
-- `BetterGenshinImpact/ViewModel/Pages/ScriptControlViewModel.cs`
-- `BetterGenshinImpact/Service/ScriptService.cs`
-- `BetterGenshinImpact/Core/Config/Global.cs`
-- `BetterGenshinImpact/Core/Config/OneDragonFlowConfig.cs`
-- `BetterGenshinImpact/Model/OneDragonTaskItem.cs`
-
-BetterGI is GPL-3.0 licensed. BetterGI AI should not vendor or copy BetterGI code; it should treat BetterGI as an installed external application.
-
-## Invocation Surface
-
-BetterGI currently has a small command-line surface that is useful enough for the first real adapter.
-
-| Operation | CLI form | Evidence | BetterGI AI mapping |
-| --- | --- | --- | --- |
-| Start capture/home flow | `BetterGI.exe start` | `CommandLineOptions.Parse` maps any arg containing `start` to `CommandLineAction.Start`, after more specific cases | `runner.start` or internal readiness action, not a general agent tool yet |
-| Run one-dragon config | `BetterGI.exe --startOneDragon <configName>` | `CommandLineOptions.Parse`; `ApplicationHostService` navigates to `OneDragonFlowPage`; execution continues in `OneDragonFlowViewModel.OnLoaded` | `tasks.run` with `kind: "task"` and a BetterGI task id such as `one_dragon:<name>` |
-| Run script/config groups | `BetterGI.exe --startGroups <groupName...>` | `CommandLineOptions.Parse`; `ApplicationHostService` calls `ScriptControlViewModel.OnStartMultiScriptGroupWithNamesAsync` | `tasks.run` with `kind: "script"` or `kind: "group"` and allowlisted group names |
-| Resume task progress | `BetterGI.exe --TaskProgress <progressName...>` | `CommandLineOptions.Parse`; `ApplicationHostService` calls `OnStartMultiScriptTaskProgressAsync` | Future resume operation; do not expose until runner can validate progress files |
-
-Important: `--startContinuousOneDragon` was found in AutoBGI, but not in this BetterGI checkout's `CommandLineOptions.cs`. Treat it as unverified for direct BetterGI execution until tested against the user's installed BetterGI build or found in another upstream revision.
-
-## File and Directory Surface
-
-BetterGI resolves relative paths from `AppContext.BaseDirectory` through `Global.Absolute(...)`.
-
-| Purpose | Path under BetterGI install | Use in BetterGI AI |
+| BetterGI surface | Local path | BetterGI AI use |
 | --- | --- | --- |
-| Main executable | `BetterGI.exe` | Launch target for process adapter |
-| Logs | `log\better-genshin-impact.log` and sibling log files | Read-only `runner.logs`, status parsing |
-| One-dragon configs | `User\OneDragon\*.json` | Read-only inventory for `tasks.list`; possible future config preview |
-| Script groups | `User\ScriptGroup\*.json` | Read-only inventory for `tasks.list`; validated launch names for `--startGroups` |
-| JS scripts | `User\JsScript` | Inventory only; do not run arbitrary scripts outside configured groups |
-| Auto pathing | `User\AutoPathing` | Inventory/status only |
-| Auto fight | `User\AutoFight` | Inventory/status only |
-| Task progress | likely under `log\task_progress` / task progress manager storage | Future resume support after exact format is verified |
+| One-dragon configs | `User\OneDragon\*.json` | Inspect and edit named one-dragon configs |
+| Script/config groups | `User\ScriptGroup\*.json` | Inspect, create, and edit config groups |
+| Pathing routes | `User\AutoPathing\**\*.json` | Inventory and config-group project references |
+| JavaScript scripts | `User\JsScript\*` | Inventory and config-group project references |
+| Combat strategies | `User\AutoFight\**\*` | Inventory and pathing auto-fight configuration |
+| Subscriptions | `User\Subscriptions\<repo>.json` | Edit subscribed repository paths |
+| Repository index | `Repos\<repo>\repo.json` or `repo_updated.json` | Search script candidates before subscription |
 
-The first adapter should read only filenames and minimal metadata. It should not mutate `User` JSON files.
+## Config Editing Model
 
-## One-Dragon Tasks
+BetterGI AI edits BetterGI JSON only through structured helper scripts:
 
-`OneDragonTaskItem.InitAction` maps configured task names to concrete BetterGI task implementations. The current source includes these task names:
-
-- `领取邮件`
-- `合成树脂`
-- `自动秘境`
-- `自动首领讨伐`
-- `自动幽境危战`
-- `领取每日奖励`
-- `领取尘歌壶奖励`
-- `自动地脉花`
-
-The one-dragon config file stores `TaskEnabledList` plus task-specific settings such as country, party, domain, boss, ley-line options, and completion action. BetterGI AI should not attempt to assemble or modify these per-task internals initially. The safe control point is choosing a named one-dragon config that the user already created in BetterGI.
+- read/write UTF-8 JSON
+- validate known names against local inventory
+- create backups for real writes when practical
+- report changed fields
+- avoid hand-copying repository files into `User` folders
 
 ## Script Groups
 
-BetterGI script groups are stored as JSON files under `User\ScriptGroup`. The command line accepts one or more group names as separate arguments:
-
-```powershell
-BetterGI.exe --startGroups "group-a" "group-b"
-```
-
-`ScriptService.RunMulti` handles the actual execution and task progress tracking. BetterGI AI should expose only configured/allowlisted group names, not arbitrary folder paths or script names.
-
-Observed script group JSON structure:
+Pathing, JavaScript, and other project entries live in `projects[]`. Combat strategies are selected through:
 
 ```json
 {
-  "index": 1,
-  "name": "aitest",
   "config": {
-    "pathingConfig": {},
-    "shellConfig": {},
-    "enableShellConfig": false
-  },
-  "projects": []
+    "pathingConfig": {
+      "autoFightEnabled": true,
+      "autoFightConfig": {
+        "strategyName": "..."
+      }
+    }
+  }
 }
 ```
 
-`projects` entries reference route/script files rather than embedding full route content. A pathing entry uses:
+Do not treat combat strategies as route projects.
 
-```json
-{
-  "name": "01-route.json",
-  "folderName": "relative\\path\\under\\User\\AutoPathing",
-  "jsScriptSettingsObject": null,
-  "index": 1,
-  "type": "Pathing",
-  "status": "Enabled",
-  "schedule": "Daily",
-  "runNum": 1,
-  "allowJsNotification": true,
-  "allowJsHTTPHash": ""
-}
-```
+## One-Dragon
 
-Config editing should become a BetterGI AI capability because AutoBGI MCP does not expose it. Safe editing requires UTF-8 structured parsing, backups, diff summaries, and post-write validation.
+One-dragon configs are edited by BetterGI setting block, such as:
 
-Config groups can reference these callable project inventories:
+- 自动秘境
+- 合成树脂
+- 自动地脉花
+- 领取邮件 / 领取每日奖励
+- 领取尘歌壶奖励
+- 自动首领讨伐 / 自动幽境危战
+- 配置组任务
 
-| Project type | Inventory source | Reference rule |
-| --- | --- | --- |
-| `Pathing` | `User\AutoPathing\**\*.json` | `name` is the route JSON file name; `folderName` is the relative folder under `User\AutoPathing` |
-| `Javascript` | `User\JsScript\<folder>\manifest.json` | `name` is the manifest name; `folderName` is the script folder |
-| `KeyMouse` | `User\KeyMouseScript\*` | `name` and `folderName` normally use the file name |
-| `Shell` | inline command string | high risk; should not be generated by default |
+Use installed BetterGI options when possible instead of hardcoding future-sensitive labels such as new domains or routes.
 
-Use `skills/bettergi-config-editor/scripts/list_bettergi_inventory.ps1` to enumerate these resources before editing a script group. On the current validation machine, the inventory found 4,978 pathing routes, 1 JavaScript script, 0 key/mouse scripts, 2 script groups, and 1 one-dragon config.
+## Execution
 
-## Process Behavior
-
-BetterGI is a WPF desktop app and uses a single-instance model. Command-line runs navigate the existing UI flow when the application starts; the exact behavior when another BetterGI instance is already running must be tested on the user's installed build.
-
-Adapter implication: before enabling non-dry-run launch, the runner should detect:
-
-- Windows host
-- configured BetterGI install path
-- `BetterGI.exe` exists
-- log directory exists or can be identified
-- whether `BetterGI.exe` process is already running
-- whether a mutating runner job is already active
-
-## Recommended BetterGI AI Adapter
-
-Use a `bettergi-cli` adapter as the default first real executor.
-
-Read-only operations:
-
-- detect executable/log/config directories
-- list one-dragon configs from `User\OneDragon\*.json`
-- list script groups from `User\ScriptGroup\*.json`
-- tail BetterGI logs
-- report BetterGI process state
-
-Mutating operations, gated by allowlist and dry-run support:
-
-- `--startOneDragon <allowlistedName>`
-- `--startGroups <allowlistedNames...>`
-
-Do not expose:
-
-- arbitrary process execution
-- arbitrary PowerShell/cmd/bat execution
-- unrestricted editing of BetterGI `User` files
-- raw hotkey/mouse/keyboard actions
-- task progress resume until storage and validation are understood
+Execution is normally delegated to AutoBGI MCP, not direct BetterGI process control. BetterGI AI validates and edits local configuration first, then uses AutoBGI to start a user-approved one-dragon or config group.

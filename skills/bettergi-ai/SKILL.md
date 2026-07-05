@@ -1,6 +1,11 @@
 ---
 name: bettergi-ai
+display_name: BetterGI AI
+title: BetterGI AI skill
 description: Single BetterGI + AutoBGI companion skill package. Use when an agent needs to set up BetterGI/AutoBGI paths, inspect status, edit BetterGI one-dragon or script-group JSON, search or update script subscriptions, reason about AutoBGI MCP tools, query backpack or character build data, capture BetterGI/AutoBGI screenshots on request, or launch a user-approved BetterGI one-dragon/config group through AutoBGI MCP.
+homepage: https://github.com/ESchrodinger/BetterGI_AI
+author: ESchrodinger
+version: 0.2.0
 ---
 
 # BetterGI AI

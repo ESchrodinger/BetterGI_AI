@@ -6,6 +6,15 @@ BetterGI AI 是一个面向 BetterGI 和 AutoBGI 的单一 Agent Skill 包，以
 
 它不替代 BetterGI，不重新实现游戏自动化，也不另起一套 runner。BetterGI 仍然是上游桌面自动化应用；AutoBGI 是推荐的执行层，通过 MCP SSE 服务对外提供受约束的调用能力。
 
+## 前置安装
+
+新用户必须先安装两个上游项目，本 skill 才能执行真实任务：
+
+- BetterGI：从 BetterGI 官方文档/下载页安装桌面自动化应用。
+- AutoBGI：从 AutoBGI 上游项目/Release 安装，然后在 AutoBGI 中配置 BetterGI 安装路径。
+
+安装后，进入 AutoBGI 设置，填写 BetterGI 路径，开启 MCP，并确认 AutoBGI Web/MCP 服务端口和 apiKey。本仓库只提供 agent skill 和辅助脚本，不内置 BetterGI、AutoBGI，也不提供独立 runner。
+
 ## 项目定位
 
 BetterGI AI 目前只做三件事：
@@ -64,10 +73,10 @@ agent 不应该一次性读取所有参考文档，而是按用户请求加载�
 ```json
 {
   "bettergi": {
-    "installPath": "C:\\Program Files\\BetterGI"
+    "installPath": "C:\\Path\\To\\BetterGI"
   },
   "autobgi": {
-    "installPath": "C:\\Tools\\autobgi",
+    "installPath": "C:\\Path\\To\\AutoBGI",
     "mcp": {
       "url": "http://127.0.0.1:10086/mcp/sse",
       "apiKey": "..."
@@ -78,7 +87,47 @@ agent 不应该一次性读取所有参考文档，而是按用户请求加载�
 
 不要提交真实 API key、cookie、账号数据、日志、截图或 BetterGI 用户数据。
 
+## AutoBGI MCP 连接配置
+
+默认本机 MCP 配置如下：
+
+```json
+{
+  "mcpServers": {
+    "AutoBGI": {
+      "type": "sse",
+      "url": "http://127.0.0.1:10086/mcp/sse",
+      "headers": {
+        "apiKey": "abgi"
+      }
+    }
+  }
+}
+```
+
+真实 URL 是 AutoBGI Web 服务地址加 `/mcp/sse`。端口读取 AutoBGI `main.json` 的 `post` 字段；如果 `post` 为空或 `":"`，AutoBGI 会回退到 `:8082`。MCP key 读取 AutoBGI `abgiUser.yaml` 的 `auth.api_key` 字段；请求头名称必须是 `apiKey`。
+
+MCP 需要 AutoBGI 正在运行，并且 `main.json` 中 `Control.IsMcp=true`。Web 登录和 MCP 是两回事，浏览器未登录不代表 MCP 不能启动。修改端口、MCP 开关或 BetterGI 路径后，需要从 AutoBGI 安装目录重启：
+
+```bash
+python skills/bettergi-ai/scripts/manage_bettergi_lifecycle.py --action restart-autobgi
+```
+
+然后重新探测：
+
+```bash
+python skills/bettergi-ai/scripts/probe_autobgi_mcp.py --call-tool findBgiIndex --output .bettergi-ai/status/findBgiIndex.json
+```
+
 ## 常用命令
+
+在 PowerShell 中查看或写入 BetterGI/AutoBGI 中文 JSON 前，先初始化当前会话的 UTF-8 设置：
+
+```powershell
+. .\skills\bettergi-ai\scripts\Use-Utf8PowerShell.ps1
+```
+
+JSON 修改优先使用本仓库的 Python 辅助脚本。如果 PowerShell 里中文显示成乱码，先用 `Get-Content -Encoding UTF8` 或 `Read-Utf8Text` 重新读取，不要直接判断文件已经损坏。
 
 运行 BetterGI 配置辅助脚本的 smoke test：
 
@@ -96,6 +145,12 @@ python skills/bettergi-ai/scripts/run_bettergi_config_smoke_tests.py --install-p
 
 ```bash
 python skills/bettergi-ai/scripts/probe_autobgi_mcp.py --output .bettergi-ai/status/autobgi-tools.json
+```
+
+通过 AutoBGI 只读 Web API 检查 BetterGI/AutoBGI 版本：
+
+```bash
+python skills/bettergi-ai/scripts/check_upstream_versions.py --output .bettergi-ai/status/versions.json
 ```
 
 离线验证 AutoBGI MCP 安全策略：
@@ -129,6 +184,10 @@ python skills/bettergi-ai/scripts/summarize_bettergi_capabilities.py --status-js
 - `collectMaterialRoutes`
 - `collectCookingRoutes`
 - 关闭、备份、签到、更新、原始输入、远程控制或任意命令执行
+
+agent 不允许瞎编 BetterGI JavaScript、路线或键鼠脚本。配置组项目必须来自本地 BetterGI 库存或脚本仓库搜索结果，并在写入前验证。创建 `User\ScriptGroup\<name>.json` 或 `User\OneDragon\<name>.json` 不代表任务已经执行；真正执行只能在状态检查后，通过受约束的 AutoBGI MCP `RunCronTask` 流程完成。
+
+对于“博士周本”“木偶天赋材料”“新出的秘境”这类模糊说法，agent 应该先联网搜索，确认当前版本里的标准角色、材料、周本或秘境名称，再回到 BetterGI 本地选项或脚本仓库索引中匹配。联网只负责澄清用户意图，最终能不能执行以本机 BetterGI 数据为准。
 
 ## 执行顺序
 

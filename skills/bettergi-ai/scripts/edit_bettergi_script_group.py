@@ -11,6 +11,7 @@ from bettergi_common import json_dump, read_json, resolve_bettergi_install_path,
 
 
 PROJECT_TYPES = {"Pathing", "Javascript", "KeyMouse", "Shell"}
+SAFE_PROJECT_TYPES = {"Pathing", "Javascript", "KeyMouse"}
 
 
 def script_group_path(install_path: Path, group_name: str) -> Path:
@@ -107,7 +108,7 @@ def normalize_indexes(projects: list[dict[str, Any]]) -> None:
         project["index"] = index
 
 
-def parse_project(raw: str) -> dict[str, Any]:
+def parse_project(raw: str, *, allow_shell: bool = False) -> dict[str, Any]:
     parts = raw.split("|")
     if len(parts) < 3:
         raise ValueError(
@@ -116,6 +117,11 @@ def parse_project(raw: str) -> dict[str, Any]:
     project_type, name, folder_name = [part.strip() for part in parts[:3]]
     if project_type not in PROJECT_TYPES:
         raise ValueError(f"project type must be one of {', '.join(sorted(PROJECT_TYPES))}: {project_type}")
+    if project_type not in SAFE_PROJECT_TYPES and not allow_shell:
+        raise ValueError(
+            f"project type {project_type} is not allowed by default. "
+            "Do not create arbitrary shell/script execution entries unless the user explicitly approves --allow-shell-project."
+        )
     schedule = parts[3].strip() if len(parts) >= 4 and parts[3].strip() else "Daily"
     run_num = int(parts[4]) if len(parts) >= 5 and parts[4].strip() else 1
     return {
@@ -160,7 +166,7 @@ def apply_edits(install_path: Path, group: dict[str, Any], args: argparse.Namesp
     projects = group.setdefault("projects", [])
 
     for raw in args.add_project:
-        project = parse_project(raw)
+        project = parse_project(raw, allow_shell=args.allow_shell_project)
         projects.append(project)
         changed.append(f"projects.add:{project['type']}:{project['name']}")
 
@@ -233,6 +239,15 @@ def edit_script_group(args: argparse.Namespace) -> dict[str, Any]:
     before = summarize_group(path, group)
     changed_fields = apply_edits(install_path, group, args)
     validations = [validate_project_reference(install_path, project) for project in group.get("projects", [])]
+    invalid_projects = [item for item in validations if not item.get("valid")]
+    added_or_created = created or any(field.startswith("projects.add:") for field in changed_fields)
+    if added_or_created and invalid_projects and not args.allow_missing_project:
+        raise ValueError(
+            "script group references must come from installed BetterGI scripts/routes/key-mouse files. "
+            f"Missing project references: {json_dump(invalid_projects)}. "
+            "Search installed scripts or repository index first; do not invent JS scripts. "
+            "Use --allow-missing-project only after the user explicitly approved a placeholder."
+        )
     after = summarize_group(path, group)
     changed = created or bool(changed_fields)
     backup_path: str | None = None
@@ -288,6 +303,8 @@ def main() -> None:
     parser.add_argument("--disable-project", action="append", default=[])
     parser.add_argument("--set-strategy")
     parser.add_argument("--auto-fight-enabled", type=lambda value: value.casefold() in {"true", "1", "yes", "on"}, default=None)
+    parser.add_argument("--allow-missing-project", action="store_true")
+    parser.add_argument("--allow-shell-project", action="store_true")
     args = parser.parse_args()
     print(json_dump(edit_script_group(args)))
 

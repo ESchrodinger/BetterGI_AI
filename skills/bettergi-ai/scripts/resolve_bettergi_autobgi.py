@@ -186,15 +186,35 @@ def probe_mcp(url: str, api_key: str, timeout: float = 1.0) -> dict[str, Any]:
         return {"url": url, "reachable": False, "error": str(exc)}
 
 
+def mcp_url_from_autobgi_main(autobgi_path: str | None) -> str | None:
+    if not autobgi_path:
+        return None
+    main = read_autobgi_main(Path(autobgi_path))
+    post = str(main.get("post") or "").strip()
+    if not post or post == ":":
+        post = ":8082"
+    if post.startswith(":"):
+        return f"http://127.0.0.1{post}/mcp/sse"
+    if post.startswith("http://") or post.startswith("https://"):
+        return post.rstrip("/") + "/mcp/sse"
+    return None
+
+
 def build_mcp_candidates(settings: dict[str, Any], api_key: str | None) -> list[dict[str, Any]]:
     saved = settings.get("autobgi", {}).get("mcp", {}) if isinstance(settings.get("autobgi"), dict) else {}
+    install_path = settings.get("autobgi", {}).get("installPath") if isinstance(settings.get("autobgi"), dict) else None
     urls = []
     if saved.get("url"):
         urls.append(str(saved["url"]))
+    main_url = mcp_url_from_autobgi_main(str(install_path)) if install_path else None
+    if main_url:
+        urls.append(main_url)
     urls.extend(
         [
             "http://127.0.0.1:10086/mcp/sse",
             "http://localhost:10086/mcp/sse",
+            "http://127.0.0.1:8082/mcp/sse",
+            "http://localhost:8082/mcp/sse",
         ]
     )
     deduped = []
@@ -287,6 +307,7 @@ def resolve(args: argparse.Namespace) -> dict[str, Any]:
             "autobgiMain": {
                 "path": str(Path(autobgi_path) / "main.json") if autobgi_path else None,
                 "betterGIAddress": autobgi_main.get("BetterGIAddress"),
+                "post": autobgi_main.get("post"),
                 "isMcp": (autobgi_main.get("Control") or {}).get("IsMcp")
                 if isinstance(autobgi_main.get("Control"), dict)
                 else None,

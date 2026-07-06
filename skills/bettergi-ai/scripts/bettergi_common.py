@@ -24,8 +24,14 @@ PATH_MAPPER = {
 
 
 def read_json(path: Path) -> Any:
-    with path.open("r", encoding="utf-8") as f:
-        return json.load(f)
+    try:
+        with path.open("r", encoding="utf-8") as f:
+            return json.load(f)
+    except json.JSONDecodeError as exc:
+        if not str(exc).startswith("Unexpected UTF-8 BOM"):
+            raise
+        with path.open("r", encoding="utf-8-sig") as f:
+            return json.load(f)
 
 
 def write_json(path: Path, value: Any) -> None:

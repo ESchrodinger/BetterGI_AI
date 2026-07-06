@@ -5,6 +5,9 @@ import csv
 import json
 import subprocess
 import sys
+import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import Any
 
@@ -89,6 +92,42 @@ def autobgi_start_target(install_path: Path | None) -> Path | None:
     return next((path for path in candidates if path.exists()), None)
 
 
+def autobgi_restart_target(install_path: Path | None) -> Path | None:
+    if not install_path:
+        return None
+    candidates = [
+        install_path / "auto-bgi.exe",
+        install_path / "autobgi.exe",
+        install_path / "run_auto_bgi_hidden.bat",
+        install_path / "run_auto_bgi.vbs",
+    ]
+    return next((path for path in candidates if path.exists()), None)
+
+
+def read_autobgi_main(install_path: Path | None) -> dict[str, Any]:
+    if not install_path:
+        return {}
+    main_json = install_path / "main.json"
+    if not main_json.exists():
+        return {}
+    try:
+        value = read_json(main_json)
+        return value if isinstance(value, dict) else {}
+    except Exception:
+        return {}
+
+
+def autobgi_service_url(main: dict[str, Any]) -> str:
+    post = str(main.get("post") or "").strip()
+    if not post or post == ":":
+        post = ":8082"
+    if post.startswith(":"):
+        return f"http://127.0.0.1{post}"
+    if post.startswith("http://") or post.startswith("https://"):
+        return post.rstrip("/")
+    return "http://127.0.0.1:10086"
+
+
 def bettergi_exe_path(install_path: Path) -> Path:
     return install_path / "BetterGI.exe"
 
@@ -97,6 +136,8 @@ def build_status(settings_path: Path, install_path_arg: str | None = None) -> di
     settings = read_settings(settings_path)
     bettergi_path = resolve_bettergi_install_path(install_path_arg or "", settings_path)
     auto_path = autobgi_install_path(settings)
+    auto_main = read_autobgi_main(auto_path)
+    auto_url = autobgi_service_url(auto_main)
 
     autobgi_processes = matching_processes(AUTOBGI_PROCESS_NAMES)
     bettergi_processes = matching_processes(BETTERGI_PROCESS_NAMES)
@@ -115,6 +156,12 @@ def build_status(settings_path: Path, install_path_arg: str | None = None) -> di
             "installPath": str(auto_path) if auto_path else "",
             "startTarget": str(autobgi_start_target(auto_path)) if autobgi_start_target(auto_path) else "",
             "startTargetExists": bool(autobgi_start_target(auto_path)),
+            "mainJson": str(auto_path / "main.json") if auto_path else "",
+            "configuredServiceUrl": auto_url,
+            "configuredMcpUrl": auto_url.rstrip("/") + "/mcp/sse",
+            "configuredIsMcp": (auto_main.get("Control") or {}).get("IsMcp")
+            if isinstance(auto_main.get("Control"), dict)
+            else None,
             "running": bool(autobgi_processes),
             "processes": autobgi_processes,
         },
@@ -159,6 +206,45 @@ def start_process(path: Path, dry_run: bool) -> dict[str, Any]:
     return {"action": "start", "target": str(path), "dryRun": False}
 
 
+def wait_for_process_state(names: set[str], *, running: bool, timeout_seconds: float) -> list[dict[str, str]]:
+    deadline = time.monotonic() + timeout_seconds
+    last: list[dict[str, str]] = []
+    while time.monotonic() < deadline:
+        last = matching_processes(names)
+        if bool(last) == running:
+            return last
+        time.sleep(0.5)
+    return last
+
+
+def probe_http(url: str, api_key: str | None = None, timeout_seconds: float = 3.0) -> dict[str, Any]:
+    headers = {"Accept": "text/event-stream"} if url.endswith("/mcp/sse") else {}
+    if api_key:
+        headers["apiKey"] = api_key
+    request = urllib.request.Request(url, headers=headers, method="GET")
+    try:
+        with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
+            content_type = response.headers.get("Content-Type", "")
+            if url.endswith("/mcp/sse"):
+                return {
+                    "url": url,
+                    "reachable": True,
+                    "status": response.status,
+                    "contentType": content_type,
+                    "isSse": "text/event-stream" in content_type,
+                }
+            return {
+                "url": url,
+                "reachable": True,
+                "status": response.status,
+                "contentType": content_type,
+            }
+    except urllib.error.URLError as exc:
+        return {"url": url, "reachable": False, "error": str(getattr(exc, "reason", exc))}
+    except Exception as exc:
+        return {"url": url, "reachable": False, "error": str(exc)}
+
+
 def stop_processes(processes: list[dict[str, str]], dry_run: bool, force: bool) -> dict[str, Any]:
     if dry_run:
         return {"action": "stop", "targets": processes, "dryRun": True, "force": force}
@@ -179,6 +265,23 @@ def stop_processes(processes: list[dict[str, str]], dry_run: bool, force: bool) 
     return {"action": "stop", "targets": stopped, "dryRun": False, "force": force}
 
 
+def read_autobgi_api_key(install_path: Path | None) -> str | None:
+    if not install_path:
+        return None
+    yaml_path = install_path / "abgiUser.yaml"
+    if not yaml_path.exists():
+        return None
+    for encoding in ("utf-8", "utf-8-sig"):
+        try:
+            for line in yaml_path.read_text(encoding=encoding).splitlines():
+                stripped = line.strip()
+                if stripped.startswith("api_key:"):
+                    return stripped.split(":", 1)[1].strip().strip("'\"") or None
+        except UnicodeDecodeError:
+            continue
+    return None
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Inspect or manage BetterGI/AutoBGI lifecycle.")
     parser.add_argument(
@@ -186,6 +289,7 @@ def main() -> None:
         choices=[
             "status",
             "start-autobgi",
+            "restart-autobgi",
             "start-bettergi",
             "stop-autobgi",
             "stop-bettergi",
@@ -216,6 +320,29 @@ def main() -> None:
         if not target:
             raise FileNotFoundError("AutoBGI start target was not found")
         result = start_process(target, args.dry_run)
+    elif args.action == "restart-autobgi":
+        settings = read_settings(settings_path)
+        auto_path = autobgi_install_path(settings)
+        target = autobgi_restart_target(auto_path)
+        if not target:
+            raise FileNotFoundError("AutoBGI start target was not found")
+        stopped = stop_processes(status["autobgi"]["processes"], args.dry_run, True)
+        if not args.dry_run:
+            wait_for_process_state(AUTOBGI_PROCESS_NAMES, running=False, timeout_seconds=8)
+        started = start_process(target, args.dry_run)
+        after_processes = [] if args.dry_run else wait_for_process_state(AUTOBGI_PROCESS_NAMES, running=True, timeout_seconds=10)
+        service_url = status["autobgi"]["configuredServiceUrl"]
+        mcp_url = status["autobgi"]["configuredMcpUrl"]
+        api_key = read_autobgi_api_key(auto_path)
+        result = {
+            "action": "restart-autobgi",
+            "stop": stopped,
+            "start": started,
+            "processesAfterRestart": after_processes,
+            "webProbe": None if args.dry_run else probe_http(service_url),
+            "mcpProbe": None if args.dry_run else probe_http(mcp_url, api_key=api_key),
+            "expectedWorkingDirectory": str(auto_path) if auto_path else "",
+        }
     elif args.action == "start-bettergi":
         if not args.allow_direct_bettergi_start:
             raise PermissionError(

@@ -25,18 +25,32 @@ Load only the reference needed for the request:
 | Start/check/close AutoBGI, BetterGI, or Genshin relationship | `references/lifecycle.md` |
 | Script groups, local inventory, subscriptions, repository search | `references/config-editor.md` |
 | One-dragon config by BetterGI setting block | `references/one-dragon.md` |
+| Ambiguous Genshin terms, nicknames, materials, weekly bosses, domains, or user shorthand | `references/intent-resolution.md` |
 | AutoBGI MCP tools, allowed/disabled tools, execution | `references/autobgi-safe-control.md` |
+| Upstream project docs, feature scope, version/update checks | `references/upstream-docs.md` |
+| Windows PowerShell Chinese text or JSON appears garbled | `references/windows-encoding.md` |
 
 Do not load all references by default.
 
 ## Core Rules
 
 - Prefer read-only discovery before mutation.
+- When the user's Genshin request is ambiguous or likely time-sensitive, search the web before mapping it to BetterGI config. Do not rely only on model memory for nicknames, new characters, new domains, weekly bosses, or material names.
 - Use scripts in this skill's `scripts/` directory for deterministic local JSON edits and AutoBGI MCP probing.
+- Do not bake a user's local BetterGI/AutoBGI install path into reusable code or docs; keep real paths in local settings or task-local commands only.
+- Read AutoBGI and BetterGI JSON files as UTF-8 and tolerate UTF-8 BOM. Windows PowerShell default decoding can corrupt Chinese JSON text and create false parse failures.
+- On Windows, initialize PowerShell UTF-8 handling with `scripts/Use-Utf8PowerShell.ps1` before reading/writing Chinese JSON or Markdown through PowerShell. Prefer Python helpers for JSON mutation.
+- After changing JSON/config path handling, run `scripts/run_encoding_smoke_tests.py` to verify Chinese JSON, UTF-8 BOM, and AutoBGI MCP URL derivation.
+- For version checks, use `scripts/check_upstream_versions.py` and report only read-only results unless the user explicitly approves an update.
 - Do not edit credentials, cookies, API keys, account secrets, or unrelated BetterGI settings.
 - Do not directly control Genshin, raw keyboard/mouse input, shell execution, or AutoBGI's broad scheduler.
+- Do not invent BetterGI JavaScript, pathing, key-mouse, or shell script entries. Script-group projects must come from local BetterGI inventory or repository search results that the user chooses.
+- Creating a script group is not execution. After creating `User\ScriptGroup\<name>.json`, either add/enable it in a target one-dragon config or launch it standalone through AutoBGI MCP `启动配置组` after status checks.
+- Creating a one-dragon config is not execution. A new one-dragon config must explicitly enable concrete BetterGI tasks or existing script groups, then launch through AutoBGI MCP `启动一条龙` only after status checks and user-approved target validation.
+- Derive AutoBGI MCP URL from AutoBGI `main.json` field `post` when an install path is known; MCP runs at `/mcp/sse` on the same port as AutoBGI Web. `:8082` is AutoBGI's fallback when `post` is empty.
 - For execution, use AutoBGI MCP only after checking status and validating the exact user-approved target.
 - Do not open BetterGI before an AutoBGI MCP execution command. AutoBGI's BetterGI command-line launch can fail when BetterGI is already open; let AutoBGI start BetterGI and let BetterGI start/control Genshin.
+- When restarting AutoBGI, verify the PID/start time changed and then verify Web plus MCP SSE headers. AutoBGI Web login is not required for MCP; MCP requires `Control.IsMcp=true` and the correct `apiKey` header.
 - After any execution attempt, report the actual MCP call result or error and then read `findBgiIndex` again. Do not claim that a task started without tool-result evidence.
 - If `probe_autobgi_mcp.py` fails, report its structured JSON error (`category`, `error`, `hints`) and classify the cause. Do not say only "probe script failed".
 - Creating or editing a script group only writes `User\ScriptGroup\<name>.json`. It does not automatically add that group to any one-dragon flow. After script-group changes, explicitly choose the run entry: add/enable it in a target one-dragon config, or launch it as a standalone config group through AutoBGI MCP `启动配置组`.

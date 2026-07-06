@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -14,12 +15,15 @@ PROBE = SCRIPT_DIR / "probe_autobgi_mcp.py"
 
 
 def run_policy(args: list[str], *, should_pass: bool) -> dict[str, Any]:
+    env = os.environ.copy()
+    env["PYTHONIOENCODING"] = "utf-8"
     completed = subprocess.run(
         [sys.executable, str(PROBE), "--policy-only", *args],
         check=False,
         capture_output=True,
         text=True,
         encoding="utf-8",
+        env=env,
     )
     if should_pass and completed.returncode != 0:
         raise AssertionError(f"policy should pass: {args}\n{completed.stderr or completed.stdout}")

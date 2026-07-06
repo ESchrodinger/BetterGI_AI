@@ -368,6 +368,7 @@ def apply_edits(config: dict[str, Any], install_path: Path, args: argparse.Names
 def edit_one_dragon(args: argparse.Namespace) -> dict[str, Any]:
     install_path = resolve_bettergi_install_path(args.install_path)
     config_path = one_dragon_path(install_path, args.config_name)
+    explicit_task_edits = bool(args.only_task or args.enable_task or args.enable_script_group)
 
     created = False
     copied_from: str | None = None
@@ -384,6 +385,11 @@ def edit_one_dragon(args: argparse.Namespace) -> dict[str, Any]:
             config["Name"] = args.config_name
             copied_from = str(source_path)
         else:
+            if not explicit_task_edits:
+                raise ValueError(
+                    "creating a new one-dragon config requires at least one explicit task. "
+                    "Use --only-task, --enable-task, or --enable-script-group; do not create an empty one-dragon config and claim it is runnable."
+                )
             config = new_one_dragon_config(args.config_name)
         created = True
     else:
@@ -422,6 +428,12 @@ def edit_one_dragon(args: argparse.Namespace) -> dict[str, Any]:
         "backupPath": backup_path,
         "before": before,
         "after": after,
+        "nextStep": {
+            "requiredBeforeExecution": True,
+            "reason": "Editing or creating User\\OneDragon\\<name>.json does not execute it. Run only after status checks through AutoBGI MCP RunCronTask taskName '启动一条龙' with params equal to this exact config name.",
+            "enabledTasks": after.get("enabledTasks", []),
+            "scriptGroupEnabledTasks": after.get("scriptGroupEnabledTasks", []),
+        },
     }
 
 

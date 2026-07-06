@@ -12,6 +12,8 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+from bettergi_common import read_json
+
 
 DEFAULT_SETTINGS_PATH = Path(".bettergi-ai") / "local.settings.json"
 DEFAULT_MCP_URL = "http://127.0.0.1:10086/mcp/sse"
@@ -48,6 +50,14 @@ class SseMcpClient:
             headers["apiKey"] = self.api_key
         request = urllib.request.Request(self.url, headers=headers, method="GET")
         self._response = urllib.request.urlopen(request, timeout=self.timeout)
+        content_type = self._response.headers.get("Content-Type", "")
+        if "text/event-stream" not in content_type.casefold():
+            self._response.close()
+            self._response = None
+            raise McpProbeError(
+                "MCP SSE endpoint returned non-SSE content-type "
+                f"{content_type!r}; AutoBGI Web may be reachable but MCP is not enabled or the route is wrong"
+            )
         thread = threading.Thread(target=self._read_sse, daemon=True)
         thread.start()
         self._endpoint = self._wait_for_endpoint()
@@ -211,15 +221,49 @@ class SseMcpClient:
 def load_settings(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {}
-    with path.open("r", encoding="utf-8") as f:
-        value = json.load(f)
+    try:
+        with path.open("r", encoding="utf-8") as f:
+            value = json.load(f)
+    except json.JSONDecodeError as exc:
+        if not str(exc).startswith("Unexpected UTF-8 BOM"):
+            raise
+        with path.open("r", encoding="utf-8-sig") as f:
+            value = json.load(f)
     return value if isinstance(value, dict) else {}
+
+
+def mcp_url_from_autobgi_main(settings: dict[str, Any]) -> str | None:
+    autobgi = settings.get("autobgi")
+    if not isinstance(autobgi, dict):
+        return None
+    install_path = autobgi.get("installPath")
+    if not install_path:
+        return None
+
+    main_json = Path(str(install_path)) / "main.json"
+    if not main_json.exists():
+        return None
+    try:
+        main = read_json(main_json)
+    except Exception:
+        return None
+    if not isinstance(main, dict):
+        return None
+
+    post = str(main.get("post") or "").strip()
+    if not post or post == ":":
+        post = ":8082"
+    if post.startswith(":"):
+        return f"http://127.0.0.1{post}/mcp/sse"
+    if post.startswith("http://") or post.startswith("https://"):
+        return post.rstrip("/") + "/mcp/sse"
+    return None
 
 
 def resolve_mcp_config(args: argparse.Namespace) -> tuple[str, str | None]:
     settings = load_settings(Path(args.settings))
     mcp = settings.get("autobgi", {}).get("mcp", {}) if isinstance(settings, dict) else {}
-    url = args.url or mcp.get("url") or DEFAULT_MCP_URL
+    url = args.url or mcp.get("url") or mcp_url_from_autobgi_main(settings) or DEFAULT_MCP_URL
     api_key = args.api_key or mcp.get("apiKey") or DEFAULT_API_KEY
     return str(url), str(api_key) if api_key else None
 
@@ -231,24 +275,38 @@ def classify_error(exc: BaseException) -> dict[str, Any]:
 
     if isinstance(exc, McpProbeError):
         category = "mcp_probe_error"
-        if "disabled by BetterGI AI policy" in message or "requires --" in message:
+        if (
+            "disabled by BetterGI AI policy" in message
+            or "requires --" in message
+            or "requires a non-empty" in message
+            or "requires one non-empty" in message
+            or "is allowed only for" in message
+            or "requires delayInSeconds=0" in message
+            or "not in the BetterGI AI safe subset" in message
+        ):
             category = "policy_rejected"
             hints.append("This is a policy rejection, not an AutoBGI connectivity failure.")
         elif "timed out" in message:
             category = "mcp_timeout"
             hints.append("Check whether AutoBGI is running and whether the MCP SSE endpoint is responsive.")
+        elif "non-SSE content-type" in message:
+            category = "mcp_not_enabled_or_wrong_route"
+            hints.append("AutoBGI Web responded, but /mcp/sse did not return text/event-stream.")
+            hints.append("Check main.json Control.IsMcp=true, verify the URL path is /mcp/sse, then restart AutoBGI from its install directory.")
+            hints.append("If the response is HTML, the browser Web UI is reachable but MCP is not registered on that running instance.")
     elif isinstance(exc, urllib.error.HTTPError):
         category = f"http_{exc.code}"
         if exc.code in {401, 403}:
             hints.append("Check AutoBGI MCP apiKey. The default expected key is 'abgi' unless the user changed it.")
         elif exc.code == 404:
-            hints.append("Check the MCP URL path. The default expected URL is http://127.0.0.1:10086/mcp/sse.")
+            hints.append("Check the MCP URL path. MCP is served at /mcp/sse on AutoBGI's configured service port.")
     elif isinstance(exc, urllib.error.URLError):
         category = "connection_error"
         reason = str(getattr(exc, "reason", ""))
         if "refused" in reason.casefold() or "actively refused" in reason.casefold():
             category = "connection_refused"
-            hints.append("AutoBGI is probably not running, or it is not listening on port 10086.")
+            hints.append("AutoBGI is probably not running, or it is not listening on the configured port.")
+            hints.append("Read AutoBGI main.json as UTF-8 and check the post field; default fallback is :8082 when post is empty.")
         elif "timed out" in reason.casefold():
             category = "connection_timeout"
             hints.append("AutoBGI may be hung, blocked by firewall, or listening on a different host/port.")
@@ -259,7 +317,7 @@ def classify_error(exc: BaseException) -> dict[str, Any]:
         hints.append("AutoBGI did not respond before the probe timeout.")
     elif isinstance(exc, json.JSONDecodeError):
         category = "invalid_json"
-        hints.append("Check --arguments JSON formatting.")
+        hints.append("Check JSON formatting and encoding. If the file was written by PowerShell, retry with UTF-8-SIG compatible reading.")
 
     if not hints:
         hints.append("Report this structured error instead of only saying the probe script failed.")

@@ -22,6 +22,15 @@ Safety:
 - validate names against local inventory
 - report changed fields
 - do not edit credentials, cookies, API keys, or unrelated settings
+- after creating or editing a script group, explicitly resolve its run entry before saying it is ready to execute
+
+Script group run entry:
+
+- Creating `User\ScriptGroup\<name>.json` only creates the reusable config group.
+- It does not automatically add the group to any `User\OneDragon\<name>.json`.
+- If the user wants the group to run as part of one-dragon, edit the target one-dragon config and enable the script-group entry there.
+- If the user wants to run only this group, use AutoBGI MCP `RunCronTask` with taskName `启动配置组` and the exact group name after status checks.
+- If the user's intent is unclear, ask whether to add the group to a one-dragon config or keep it as a standalone config-group launch target. Do not claim a newly-created group will run until one of these entries is confirmed.
 
 Inventory:
 

@@ -258,6 +258,20 @@ def edit_script_group(args: argparse.Namespace) -> dict[str, Any]:
         "projectValidations": validations,
         "before": before,
         "after": after,
+        "nextStep": {
+            "requiredBeforeExecution": True,
+            "reason": "Creating or editing a script group only writes User\\ScriptGroup\\<name>.json; it does not automatically add the group to any one-dragon config.",
+            "options": [
+                {
+                    "entry": "oneDragon",
+                    "action": "Add or enable this script group in the target User\\OneDragon\\<name>.json before launching one-dragon.",
+                },
+                {
+                    "entry": "standaloneConfigGroup",
+                    "action": "Launch this group directly with AutoBGI MCP RunCronTask taskName '启动配置组' and params equal to the exact group name after status checks.",
+                },
+            ],
+        },
     }
 
 

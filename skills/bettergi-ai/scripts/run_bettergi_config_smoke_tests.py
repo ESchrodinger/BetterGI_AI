@@ -353,6 +353,15 @@ def main() -> None:
         all(item["valid"] for item in group_output["projectValidations"]),
         "script group project references should be valid",
     )
+    assert_true(
+        group_output["nextStep"]["requiredBeforeExecution"] is True,
+        "script group output should require choosing a run entry before execution",
+    )
+    next_step_entries = {item["entry"] for item in group_output["nextStep"]["options"]}
+    assert_true(
+        {"oneDragon", "standaloneConfigGroup"}.issubset(next_step_entries),
+        "script group output should explain both one-dragon and standalone config-group run entries",
+    )
     results.append({"case": "配置组-路径项目-战斗策略", "changedFields": group_output["changedFields"]})
 
     invalid_domain_error = run_expect_failure(

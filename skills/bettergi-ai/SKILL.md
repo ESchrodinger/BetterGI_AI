@@ -38,6 +38,7 @@ Do not load all references by default.
 - For execution, use AutoBGI MCP only after checking status and validating the exact user-approved target.
 - Do not open BetterGI before an AutoBGI MCP execution command. AutoBGI's BetterGI command-line launch can fail when BetterGI is already open; let AutoBGI start BetterGI and let BetterGI start/control Genshin.
 - After any execution attempt, report the actual MCP call result or error and then read `findBgiIndex` again. Do not claim that a task started without tool-result evidence.
+- Creating or editing a script group only writes `User\ScriptGroup\<name>.json`. It does not automatically add that group to any one-dragon flow. After script-group changes, explicitly choose the run entry: add/enable it in a target one-dragon config, or launch it as a standalone config group through AutoBGI MCP `启动配置组`.
 
 ## Script Path
 

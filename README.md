@@ -1,5 +1,7 @@
 # BetterGI AI
 
+[中文说明](README.zh-CN.md)
+
 BetterGI AI is a single Codex skill package and local helper toolkit for pairing BetterGI with AutoBGI.
 
 It does not replace BetterGI, reimplement game automation, or build a separate execution engine. BetterGI stays as the upstream desktop automation app. AutoBGI is the preferred execution service through its MCP SSE endpoint.

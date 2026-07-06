@@ -129,7 +129,7 @@ def build_status(settings_path: Path, install_path_arg: str | None = None) -> di
                 "AutoBGI service",
                 "AutoBGI MCP status preflight",
                 "AutoBGI MCP RunCronTask for an allowlisted one-dragon or script group",
-                "AutoBGI opens BetterGI through BetterGI.exe command-line",
+                "AutoBGI opens BetterGI through BetterGI.exe command-line; do not pre-open BetterGI",
                 "BetterGI handles Genshin launch/control through its own configured flow",
             ],
             "shutdown": [
@@ -197,6 +197,11 @@ def main() -> None:
     parser.add_argument("--install-path", default="")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--force", action="store_true")
+    parser.add_argument(
+        "--allow-direct-bettergi-start",
+        action="store_true",
+        help="Troubleshooting only. Normal AutoBGI execution must let AutoBGI start BetterGI.",
+    )
     args = parser.parse_args()
 
     settings_path = Path(args.settings_path)
@@ -212,6 +217,13 @@ def main() -> None:
             raise FileNotFoundError("AutoBGI start target was not found")
         result = start_process(target, args.dry_run)
     elif args.action == "start-bettergi":
+        if not args.allow_direct_bettergi_start:
+            raise PermissionError(
+                "Direct BetterGI startup is disabled by default. "
+                "For AutoBGI execution, start/check AutoBGI and use MCP RunCronTask; "
+                "do not pre-open BetterGI because AutoBGI command-line launch may fail. "
+                "For troubleshooting only, rerun with --allow-direct-bettergi-start."
+            )
         result = start_process(Path(status["bettergi"]["exePath"]), args.dry_run)
     elif args.action == "stop-autobgi":
         result = stop_processes(status["autobgi"]["processes"], args.dry_run, args.force)

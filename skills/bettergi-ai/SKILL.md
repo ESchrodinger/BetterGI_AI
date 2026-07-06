@@ -36,6 +36,8 @@ Do not load all references by default.
 - Do not edit credentials, cookies, API keys, account secrets, or unrelated BetterGI settings.
 - Do not directly control Genshin, raw keyboard/mouse input, shell execution, or AutoBGI's broad scheduler.
 - For execution, use AutoBGI MCP only after checking status and validating the exact user-approved target.
+- Do not open BetterGI before an AutoBGI MCP execution command. AutoBGI's BetterGI command-line launch can fail when BetterGI is already open; let AutoBGI start BetterGI and let BetterGI start/control Genshin.
+- After any execution attempt, report the actual MCP call result or error and then read `findBgiIndex` again. Do not claim that a task started without tool-result evidence.
 
 ## Script Path
 

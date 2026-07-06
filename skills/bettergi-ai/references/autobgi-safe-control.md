@@ -56,7 +56,10 @@ Before launch:
 1. Call `findBgiIndex`.
 2. Confirm no conflicting task is active.
 3. Validate target name locally.
-4. Ask for confirmation unless the user already issued the exact run command.
+4. Do not open BetterGI manually before `RunCronTask`; AutoBGI's BetterGI command-line launch can fail when BetterGI is already running.
+5. If BetterGI is already running, warn about the conflict and ask whether to continue, stop BetterGI, or wait.
+6. Ask for confirmation unless the user already issued the exact run command.
+7. After the call, report the MCP result or error and call `findBgiIndex` again. Never claim a task started without tool-result evidence.
 
 Other read-only calls:
 

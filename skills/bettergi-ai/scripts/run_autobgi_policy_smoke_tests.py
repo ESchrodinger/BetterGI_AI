@@ -26,7 +26,12 @@ def run_policy(args: list[str], *, should_pass: bool) -> dict[str, Any]:
     if not should_pass and completed.returncode == 0:
         raise AssertionError(f"policy should fail: {args}\n{completed.stdout}")
     if completed.returncode != 0:
-        return {"passed": False, "message": completed.stderr.strip() or completed.stdout.strip()}
+        message = completed.stderr.strip() or completed.stdout.strip()
+        try:
+            parsed = json.loads(message)
+        except json.JSONDecodeError:
+            parsed = {"error": message}
+        return {"passed": False, "message": message, "structuredError": parsed}
     return json.loads(completed.stdout)
 
 
@@ -136,7 +141,11 @@ def main() -> None:
 
     for case in rejected_cases:
         output = run_policy(case, should_pass=False)
-        results.append({"case": case, "rejected": output["message"]})
+        structured = output["structuredError"]
+        assert structured.get("ok") is False, f"rejected policy should emit structured ok=false: {case}"
+        assert structured.get("category"), f"rejected policy should emit category: {case}"
+        assert structured.get("hints"), f"rejected policy should emit hints: {case}"
+        results.append({"case": case, "rejected": structured["category"]})
 
     print(json_dump({"passed": len(results), "results": results}))
 

@@ -8,6 +8,8 @@ Probe tools:
 python scripts/probe_autobgi_mcp.py --output .bettergi-ai/status/autobgi-tools.json
 ```
 
+If this command fails, parse the structured JSON error on stderr and report `category`, `error`, and `hints`. Do not summarize it only as "probe script failed". The default endpoint is `http://127.0.0.1:10086/mcp/sse` and the default apiKey is `abgi`; override them only when the user configured different values.
+
 Validate policy without connecting to AutoBGI:
 
 ```bash
@@ -60,6 +62,12 @@ Before launch:
 5. If BetterGI is already running, warn about the conflict and ask whether to continue, stop BetterGI, or wait.
 6. Ask for confirmation unless the user already issued the exact run command.
 7. After the call, report the MCP result or error and call `findBgiIndex` again. Never claim a task started without tool-result evidence.
+
+Launch failure handling:
+
+- If the probe reports `connection_refused`, ask the user to start AutoBGI or use lifecycle setup to start AutoBGI; do not open BetterGI directly as a workaround.
+- If the probe reports `policy_rejected`, fix the arguments or ask for explicit approval; do not bypass the policy.
+- If the probe reports a successful MCP connection but `RunCronTask` returns an error, report the tool error verbatim and do not claim the target started.
 
 Other read-only calls:
 

@@ -14,6 +14,8 @@ from typing import Any
 
 
 DEFAULT_SETTINGS_PATH = Path(".bettergi-ai") / "local.settings.json"
+DEFAULT_MCP_URL = "http://127.0.0.1:10086/mcp/sse"
+DEFAULT_API_KEY = "abgi"
 READ_ONLY_TOOLS = {"findBgiIndex", "queryBackpack", "queryCharacterBuild"}
 ALLOWED_RUN_CRON_TASK_NAMES = {"启动一条龙", "启动配置组"}
 DISABLED_TOOLS = {
@@ -217,11 +219,61 @@ def load_settings(path: Path) -> dict[str, Any]:
 def resolve_mcp_config(args: argparse.Namespace) -> tuple[str, str | None]:
     settings = load_settings(Path(args.settings))
     mcp = settings.get("autobgi", {}).get("mcp", {}) if isinstance(settings, dict) else {}
-    url = args.url or mcp.get("url")
-    api_key = args.api_key or mcp.get("apiKey")
-    if not url:
-        raise McpProbeError("AutoBGI MCP URL is missing")
+    url = args.url or mcp.get("url") or DEFAULT_MCP_URL
+    api_key = args.api_key or mcp.get("apiKey") or DEFAULT_API_KEY
     return str(url), str(api_key) if api_key else None
+
+
+def classify_error(exc: BaseException) -> dict[str, Any]:
+    message = str(exc)
+    category = "unexpected_error"
+    hints: list[str] = []
+
+    if isinstance(exc, McpProbeError):
+        category = "mcp_probe_error"
+        if "disabled by BetterGI AI policy" in message or "requires --" in message:
+            category = "policy_rejected"
+            hints.append("This is a policy rejection, not an AutoBGI connectivity failure.")
+        elif "timed out" in message:
+            category = "mcp_timeout"
+            hints.append("Check whether AutoBGI is running and whether the MCP SSE endpoint is responsive.")
+    elif isinstance(exc, urllib.error.HTTPError):
+        category = f"http_{exc.code}"
+        if exc.code in {401, 403}:
+            hints.append("Check AutoBGI MCP apiKey. The default expected key is 'abgi' unless the user changed it.")
+        elif exc.code == 404:
+            hints.append("Check the MCP URL path. The default expected URL is http://127.0.0.1:10086/mcp/sse.")
+    elif isinstance(exc, urllib.error.URLError):
+        category = "connection_error"
+        reason = str(getattr(exc, "reason", ""))
+        if "refused" in reason.casefold() or "actively refused" in reason.casefold():
+            category = "connection_refused"
+            hints.append("AutoBGI is probably not running, or it is not listening on port 10086.")
+        elif "timed out" in reason.casefold():
+            category = "connection_timeout"
+            hints.append("AutoBGI may be hung, blocked by firewall, or listening on a different host/port.")
+        else:
+            hints.append("Check AutoBGI process status, MCP URL, firewall, and network reachability.")
+    elif isinstance(exc, TimeoutError):
+        category = "connection_timeout"
+        hints.append("AutoBGI did not respond before the probe timeout.")
+    elif isinstance(exc, json.JSONDecodeError):
+        category = "invalid_json"
+        hints.append("Check --arguments JSON formatting.")
+
+    if not hints:
+        hints.append("Report this structured error instead of only saying the probe script failed.")
+
+    return {
+        "ok": False,
+        "category": category,
+        "error": message,
+        "hints": hints,
+        "defaults": {
+            "url": DEFAULT_MCP_URL,
+            "apiKey": DEFAULT_API_KEY,
+        },
+    }
 
 
 def parse_json_arg(value: str) -> dict[str, Any]:
@@ -377,14 +429,8 @@ if __name__ == "__main__":
     try:
         raise SystemExit(main())
     except McpProbeError as exc:
-        print(
-            json.dumps(
-                {
-                    "error": str(exc),
-                },
-                ensure_ascii=False,
-                indent=2,
-            ),
-            file=sys.stderr,
-        )
+        print(json.dumps(classify_error(exc), ensure_ascii=False, indent=2), file=sys.stderr)
+        raise SystemExit(1)
+    except Exception as exc:
+        print(json.dumps(classify_error(exc), ensure_ascii=False, indent=2), file=sys.stderr)
         raise SystemExit(1)
